@@ -1,63 +1,80 @@
 <p align="center">
-  <h1 align="center">🛰️ S H A D O W L E N S</h1>
-  <p align="center"><strong>Global Threat Intercept — Real-Time Geospatial Intelligence Platform</strong></p>
-  <p align="center">
-
-  </p>
+  <h1 align="center">S H A D O W L E N S</h1>
+  <p align="center"><strong>Real-Time Geospatial Intelligence Platform</strong></p>
 </p>
 
 ---
-![ShadowLens](https://github.com/user-attachments/assets/000b94eb-bf33-4e8b-8c60-15ca4a723c68)
-**ShadowLens** is a real-time, full-spectrum geospatial intelligence dashboard that aggregates live data from dozens of open-source intelligence (OSINT) feeds and renders them on a unified dark-ops map interface. It tracks aircraft, ships, satellites, earthquakes, conflict zones, CCTV networks, GPS jamming, and breaking geopolitical events — all updating in real time.
 
-Built with **Next.js**, **MapLibre GL**, **FastAPI**, and **Python**, it's designed for analysts, researchers, and enthusiasts who want a single-pane-of-glass view of global activity.
+![ShadowLens](https://github.com/user-attachments/assets/63c8d39a-b629-42f0-9367-b96fea1ee636)
 
-### 🤖 F.R.I.D.A.Y. — AI Analysis Engine
+**ShadowLens** is a real-time geospatial intelligence dashboard that aggregates live data from 60+ open-source intelligence (OSINT) feeds and renders them on a unified map interface. It tracks aircraft, ships, satellites, earthquakes, conflict zones, CCTV networks, GPS jamming, cyber threats, and breaking geopolitical events — all updating in real time.
 
-ShadowLens includes **F.R.I.D.A.Y.**, a local LLM-powered analysis engine that can analyze any entity on the map. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
+Built with **Next.js 16**, **MapLibre GL**, **FastAPI**, and **Python**.
+
+### F.R.I.D.A.Y. — AI Analysis Engine
+
+ShadowLens includes **F.R.I.D.A.Y.**, an LLM-powered analysis engine that can analyze any entity on the map. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
 
 * **Instant fact extraction** — Deterministic parsing of entity data (no AI, instant)
-* **Deep LLM analysis** — Full RAG pipeline with Qwen 2.5 14B for vulnerability assessment, risk analysis, and recommendations
+* **Deep LLM analysis** — RAG pipeline with FAISS indexes for vulnerability assessment, risk analysis, and recommendations
 * **Anti-hallucination validation** — 3-stage pipeline ensures answers are grounded in actual data
-* **Nmap / BloodHound / Volatility** — Specialized modules for security scan analysis
+* **Specialized modules** — Nmap scan parser, BloodHound AD attack path analysis, Volatility memory forensics
 
-### 🔍 OSINT Agent — 20+ Security Tools
+### OSINT Agent — 18+ Security Tools
 
-The integrated OSINT agent provides one-click access to:
+The integrated OSINT agent (port 8002) provides one-click access to:
 
 `nmap` · `nuclei` · `whatweb` · `theHarvester` · `spiderfoot` · `sherlock` · `h8mail` · `whois` · `dmitry` · `subfinder` · `dnsrecon` · `shodan` · `phoneinfoga` · `maigret` · `holehe` · `autorecon` · `kismet` · `snort`
 
----
-
-## Interesting Use Cases
-
-* Track private jets of billionaires
-* Monitor satellites passing overhead
-* Watch naval traffic worldwide
-* Detect GPS jamming zones
-* Follow earthquakes and disasters in real time
-* Run nmap scans on discovered hosts and analyze results with F.R.I.D.A.Y.
-* Deep OSINT searches on any target — auto-detects IPs, domains, emails, usernames
+Deep OSINT search auto-detects input type (IP, domain, email, phone, username, hash) and runs the appropriate tool combination.
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
+
+### Docker (Recommended)
 
 ```bash
 git clone https://github.com/S-O-U-L-S-E-E-K-E-R/ShadowLens.git
 cd ShadowLens
+cp .env.example .env
+# Edit .env with your API keys (AIS_API_KEY required at minimum)
 ./start.sh
 ```
 
-This starts everything — Docker containers, OSINT agent, and F.R.I.D.A.Y. engine.
+`start.sh` does three things:
+1. Starts Docker containers (frontend on port 3000, backend on port 8001)
+2. Starts the OSINT agent on port 8002 (requires Python venv setup — see below)
+3. Waits for F.R.I.D.A.Y. engine to initialize
 
 Open `http://localhost:3000` to view the dashboard.
 
-### Requirements
+### OSINT Agent Setup (First Time Only)
 
-* **Docker** and **docker compose**
-* **Python 3.10+** with venv (for OSINT agent)
-* **NVIDIA GPU** (optional, for fast F.R.I.D.A.Y. inference — falls back to CPU)
+The OSINT agent runs on the host (not in Docker) so it can access local tools like nmap and kismet:
+
+```bash
+cd osint-agent
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Windows
+
+```bash
+# From the project root
+cd frontend
+npm install
+cd ../backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+cd ../frontend
+npm run dev
+```
+
+`npm run dev` starts both the Next.js frontend (port 3000) and the FastAPI backend concurrently. Docker must be running separately if using containers.
 
 ### After a Reboot
 
@@ -66,371 +83,306 @@ cd /path/to/ShadowLens
 ./start.sh
 ```
 
-That's it — one script handles everything.
+### Requirements
+
+* **Docker** and **docker compose** (for containerized deployment)
+* **Python 3.10+** with venv (for OSINT agent)
+* **Node.js 18+** and **npm** (for development mode)
+* **NVIDIA GPU** (optional — accelerates F.R.I.D.A.Y. inference, falls back to CPU)
 
 ---
 
-## ✨ Features
+## Features
 
-### 🛩️ Aviation Tracking
-
-* **Commercial Flights** — Real-time positions via OpenSky Network (~5,000+ aircraft)
-* **Private Aircraft** — Light GA, turboprops, bizjets tracked separately
-* **Private Jets** — High-net-worth individual aircraft with owner identification
-* **Military Flights** — Tankers, ISR, fighters, transports via adsb.lol military endpoint
-* **Flight Trail Accumulation** — Persistent breadcrumb trails for all tracked aircraft
-* **Holding Pattern Detection** — Automatically flags aircraft circling (>300° total turn)
-* **Aircraft Classification** — Shape-accurate SVG icons: airliners, turboprops, bizjets, helicopters
-* **Grounded Detection** — Aircraft below 100ft AGL rendered with grey icons
-
-### 🚢 Maritime Tracking
-
-* **AIS Vessel Stream** — 25,000+ vessels via aisstream.io WebSocket (real-time)
-* **Ship Classification** — Cargo, tanker, passenger, yacht, military vessel types with color-coded icons
-* **Carrier Strike Group Tracker** — All 11 active US Navy aircraft carriers with OSINT-estimated positions
-  * Automated GDELT news scraping for carrier movement intelligence
-  * 50+ geographic region-to-coordinate mappings
-  * Disk-cached positions, auto-updates at 00:00 & 12:00 UTC
-* **Cruise & Passenger Ships** — Dedicated layer for cruise liners and ferries
-* **Clustered Display** — Ships cluster at low zoom with count labels, decluster on zoom-in
-
-### 🛰️ Space & Satellites
-
-* **Orbital Tracking** — Real-time satellite positions via CelesTrak TLE data + SGP4 propagation (2,000+ active satellites, no API key required)
-* **Mission-Type Classification** — Color-coded by mission: military recon (red), SAR (cyan), SIGINT (white), navigation (blue), early warning (magenta), commercial imaging (green), space station (gold)
-
-### 🌍 Geopolitics & Conflict
-
-* **Global Incidents** — GDELT-powered conflict event aggregation (last 8 hours, ~1,000 events)
-* **Ukraine Frontline** — Live warfront GeoJSON from DeepState Map
-* **SIGINT/RISINT News Feed** — Real-time RSS aggregation from multiple intelligence-focused sources
-* **Region Dossier** — Right-click anywhere on the map for:
-  * Country profile (population, capital, languages, currencies, area)
-  * Head of state & government type (Wikidata SPARQL)
-  * Local Wikipedia summary with thumbnail
-
-### 📷 Surveillance
-
-* **CCTV Mesh** — 2,000+ live traffic cameras from:
-  * 🇬🇧 Transport for London JamCams
-  * 🇺🇸 Austin, TX TxDOT
-  * 🇺🇸 NYC DOT
-  * 🇸🇬 Singapore LTA
-  * Custom URL ingestion
-* **Feed Rendering** — Automatic detection & rendering of video, MJPEG, HLS, embed, satellite tile, and image feeds
-* **Clustered Map Display** — Green dots cluster with count labels, decluster on zoom
-
-### 📡 Signal Intelligence
-
-* **GPS Jamming Detection** — Real-time analysis of aircraft NAC-P (Navigation Accuracy Category) values
-  * Grid-based aggregation identifies interference zones
-  * Red overlay squares with "GPS JAM XX%" severity labels
-* **Radio Intercept Panel** — Scanner-style UI for monitoring communications
-
-### 🌐 Additional Layers
-
-* **Earthquakes (24h)** — USGS real-time earthquake feed with magnitude-scaled markers
-* **Day/Night Cycle** — Solar terminator overlay showing global daylight/darkness
-* **Global Markets Ticker** — Live financial market indices (minimizable)
-* **Measurement Tool** — Point-to-point distance & bearing measurement on the map
-
----
-
-## 🏗️ Architecture
-
-```
-┌────────────────────────────────────────────────────────┐
-│                   FRONTEND (Next.js)                   │
-│                                                        │
-│  ┌─────────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ MapLibre GL │  │ NewsFeed │  │  F.R.I.D.A.Y.    │  │
-│  │  2D WebGL   │  │  SIGINT  │  │  AI Analysis     │  │
-│  │ Map Render  │  │  Intel   │  │  Panel           │  │
-│  └──────┬──────┘  └────┬─────┘  └────────┬─────────┘  │
-│         └───────────────┼────────────────┘             │
-│                         │ REST API                     │
-├─────────────────────────┼──────────────────────────────┤
-│               BACKEND (FastAPI · Docker)               │
-│                         │                              │
-│  ┌──────────────────────┼───────────────────────────┐  │
-│  │          Data Fetcher (Scheduler)                │  │
-│  │  ┌──────────┬──────────┬──────────┬───────────┐  │  │
-│  │  │ OpenSky  │ adsb.lol │CelesTrak │   USGS    │  │  │
-│  │  │ Flights  │ Military │   Sats   │  Quakes   │  │  │
-│  │  ├──────────┼──────────┼──────────┼───────────┤  │  │
-│  │  │  AIS WS  │ Carrier  │  GDELT   │   CCTV    │  │  │
-│  │  │  Ships   │ Tracker  │ Conflict │  Cameras  │  │  │
-│  │  ├──────────┼──────────┼──────────┼───────────┤  │  │
-│  │  │ DeepState│   RSS    │  Region  │    GPS    │  │  │
-│  │  │ Frontline│  Intel   │ Dossier  │  Jamming  │  │  │
-│  │  └──────────┴──────────┴──────────┴───────────┘  │  │
-│  └──────────────────────────────────────────────────┘  │
-│                         │ Proxy                        │
-├─────────────────────────┼──────────────────────────────┤
-│            OSINT AGENT (Host · Port 8002)              │
-│                         │                              │
-│  ┌──────────────────────┼───────────────────────────┐  │
-│  │  ┌────────┐  ┌───────┴──────┐  ┌─────────────┐  │  │
-│  │  │  Nmap  │  │ F.R.I.D.A.Y. │  │  Nuclei     │  │  │
-│  │  │ Scans  │  │  LLM Engine  │  │  Vuln Scan  │  │  │
-│  │  ├────────┤  │  Qwen 14B    │  ├─────────────┤  │  │
-│  │  │WhatWeb │  │  FAISS RAG   │  │ SpiderFoot  │  │  │
-│  │  ├────────┤  │  3-Stage     │  ├─────────────┤  │  │
-│  │  │Harvest │  │  Pipeline    │  │  AutoRecon  │  │  │
-│  │  ├────────┤  └──────────────┘  ├─────────────┤  │  │
-│  │  │Sherlock│  ┌──────────────┐  │   Kismet    │  │  │
-│  │  ├────────┤  │   Deep OSINT │  ├─────────────┤  │  │
-│  │  │Maigret │  │   Search     │  │   Snort     │  │  │
-│  │  └────────┘  └──────────────┘  └─────────────┘  │  │
-│  └──────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📊 Data Sources & APIs
-
-| Source | Data | Update Frequency | API Key Required |
-|---|---|---|---|
-| [OpenSky Network](https://opensky-network.org) | Commercial & private flights | ~60s | Optional (anonymous limited) |
-| [adsb.lol](https://adsb.lol) | Military aircraft | ~60s | No |
-| [aisstream.io](https://aisstream.io) | AIS vessel positions | Real-time WebSocket | **Yes** |
-| [CelesTrak](https://celestrak.org) | Satellite orbital positions (TLE + SGP4) | ~60s | No |
-| [USGS Earthquake](https://earthquake.usgs.gov) | Global seismic events | ~60s | No |
-| [GDELT Project](https://www.gdeltproject.org) | Global conflict events | ~6h | No |
-| [DeepState Map](https://deepstatemap.live) | Ukraine frontline | ~30min | No |
-| [Transport for London](https://api.tfl.gov.uk) | London CCTV JamCams | ~5min | No |
-| [TxDOT](https://its.txdot.gov) | Austin TX traffic cameras | ~5min | No |
-| [NYC DOT](https://webcams.nyctmc.org) | NYC traffic cameras | ~5min | No |
-| [Singapore LTA](https://datamall.lta.gov.sg) | Singapore traffic cameras | ~5min | **Yes** |
-| [RestCountries](https://restcountries.com) | Country profile data | On-demand (cached 24h) | No |
-| [Wikidata SPARQL](https://query.wikidata.org) | Head of state data | On-demand (cached 24h) | No |
-| [Wikipedia API](https://en.wikipedia.org/api) | Location summaries & aircraft images | On-demand (cached) | No |
-| [CARTO Basemaps](https://carto.com) | Dark map tiles | Continuous | No |
-
----
-
-## 🚀 Getting Started
-
-### 🐳 Docker Setup (Recommended for Self-Hosting)
-
-You can run the dashboard easily using the pre-built Docker images hosted on GitHub Container Registry (GHCR).
-
-1. Create a `docker-compose.yml` file:
-
-```yaml
-version: '3.8'
-
-services:
-  backend:
-    image: ghcr.io/<your-username>/live-risk-dashboard-backend:main
-    container_name: shadowlens-backend
-    ports:
-      - "8000:8000"
-    environment:
-      - AIS_API_KEY=${AIS_API_KEY}
-      - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID}
-      - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET}
-    volumes:
-      - backend_data:/app/data
-    restart: unless-stopped
-
-  frontend:
-    image: ghcr.io/<your-username>/live-risk-dashboard-frontend:main
-    container_name: shadowlens-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-volumes:
-  backend_data:
-```
-
-1. Create a `.env` file in the same directory with your API keys.
-2. Run `docker-compose up -d`.
-3. Access the dashboard at `http://localhost:3000`.
-
----
-
-### 📦 Quick Start (No Code Required)
-
-If you just want to run the dashboard without dealing with terminal commands:
-
-1. Go to the **[Releases](../../releases)** tab on the right side of this GitHub page.
-2. Download the `ShadowLens_v0.3.zip` file.
-3. Extract the folder to your computer.
-4. **Windows:** Double-click `start.bat`.
-   **Mac/Linux:** Open terminal, type `chmod +x start.sh`, and run `./start.sh`.
-5. It will automatically install everything and launch the dashboard!
-
----
-
-### 💻 Developer Setup
-
-If you want to modify the code or run from source:
-
-#### Prerequisites
-
-* **Node.js** 18+ and **npm**
-* **Python** 3.10+ with `pip`
-* API keys for: `aisstream.io` (required), and optionally `opensky-network.org` (OAuth2), `lta.gov.sg`
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/S-O-U-L-S-E-E-K-E-R/ShadowLens.git
-cd ShadowLens
-
-# Backend setup
-cd backend
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-pip install -r requirements.txt
-
-# Create .env with your API keys
-echo "AIS_API_KEY=your_aisstream_key" >> .env
-echo "OPENSKY_CLIENT_ID=your_opensky_client_id" >> .env
-echo "OPENSKY_CLIENT_SECRET=your_opensky_secret" >> .env
-
-# Frontend setup
-cd ../frontend
-npm install
-```
-
-### Running
-
-```bash
-# From the frontend directory — starts both frontend & backend concurrently
-npm run dev
-```
-
-This starts:
-
-* **Next.js** frontend on `http://localhost:3000`
-* **FastAPI** backend on `http://localhost:8000`
-
----
-
-## 🎛️ Data Layers
+### 37 Data Layers
 
 All layers are independently toggleable from the left panel:
 
-| Layer | Default | Description |
-|---|---|---|
-| Commercial Flights | ✅ ON | Airlines, cargo, GA aircraft |
-| Private Flights | ✅ ON | Non-commercial private aircraft |
-| Private Jets | ✅ ON | High-value bizjets with owner data |
-| Military Flights | ✅ ON | Military & government aircraft |
-| Tracked Aircraft | ✅ ON | Special interest watch list |
-| Satellites | ✅ ON | Orbital assets by mission type |
-| Carriers / Mil / Cargo | ✅ ON | Navy carriers, cargo ships, tankers |
-| Civilian Vessels | ❌ OFF | Yachts, fishing, recreational |
-| Cruise / Passenger | ✅ ON | Cruise ships and ferries |
-| Earthquakes (24h) | ✅ ON | USGS seismic events |
-| CCTV Mesh | ❌ OFF | Surveillance camera network |
-| Ukraine Frontline | ✅ ON | Live warfront positions |
-| Global Incidents | ✅ ON | GDELT conflict events |
-| GPS Jamming | ✅ ON | NAC-P degradation zones |
-| Day / Night Cycle | ✅ ON | Solar terminator overlay |
+**Aviation**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| Commercial Flights | adsb.lol / adsb.fi / airplanes.live (round-robin) | ~60s | No |
+| Private Flights | ADS-B Exchange | ~60s | No |
+| Private Jets | ADS-B Exchange + Plane-Alert DB | ~60s | No |
+| Military Flights | adsb.lol /v2/mil endpoint | ~60s | No |
+| Tracked Aircraft | ADS-B + Plane-Alert watchlist | ~60s | No |
+| Flight Restrictions (TFR) | FAA NOTAM | ~300s | No |
+
+* OpenSky Network used as fallback for regions where primary sources are rate-limited (requires OAuth2 credentials)
+* Flight route lookup via adsb.lol API
+* Holding pattern detection (>300 deg total turn)
+* Shape-accurate SVG icons by aircraft type (airliner, turboprop, bizjet, helicopter, fighter)
+
+**Maritime**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| Carriers / Military / Cargo | AIS Stream WebSocket | Real-time | Yes |
+| Civilian Vessels | AIS Stream WebSocket | Real-time | Yes |
+| Cruise / Passenger | AIS Stream WebSocket | Real-time | Yes |
+
+* 11 US Navy carrier strike groups tracked via GDELT news scraping with fallback OSINT positions
+* Vessel classification by AIS type code (tanker, cargo, passenger, yacht, military, fishing)
+* Flag state detection from MMSI Maritime Identification Digits
+* Carrier positions auto-update at 00:00 and 12:00 UTC
+
+**Space**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| Satellites | CelesTrak TLE + SGP4 propagation | ~30min | No |
+
+* 2,000+ active satellites with real-time orbital position calculation
+* Color-coded by mission type: military recon, SAR, SIGINT, navigation, early warning, commercial imaging, space station
+* Satellite pass prediction API for any observer location (AOS/TCA/LOS)
+* Fallback to tle.ivanstanojevic.me when CelesTrak is blocked
+
+**Geopolitics and Conflict**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| Ukraine Frontline | DeepState Map (GitHub mirror) | ~30min | No |
+| Global Incidents | GDELT + LiveUAMap | ~6h / ~5min | No |
+| Global Events | GDACS + ReliefWeb + WHO | ~30min | No |
+| Piracy Incidents | NGA ASAM | ~30min | No |
+
+**Environment and Hazards**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| Earthquakes (24h) | USGS | ~10min | No |
+| Weather Alerts | NOAA NWS CAP | ~10min | No |
+| Natural Events | GDACS (floods, cyclones, tsunamis) | ~10min | No |
+| Fire Hotspots | NASA FIRMS (MODIS/VIIRS) | ~30min | No |
+| Volcanoes | Smithsonian GVP | ~30min | No |
+| Air Quality | OpenAQ / AirNow EPA | ~10min | Optional |
+| Space Weather | NOAA SWPC | ~10min | No |
+| Radioactivity | EPA RadNet + EURDEP | ~10min | No |
+| Day/Night Cycle | Solar terminator calculation | Continuous | No |
+
+**Infrastructure**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| CCTV Mesh | 21 ingestors (see below) | ~60s | Mixed |
+| Military Bases | Hardcoded DB (200+ US/NATO) | Startup | No |
+| Nuclear Facilities | IAEA GIS (200+ reactors) | Startup | No |
+| Submarine Cables | TeleGeography | Startup | No |
+| Cable Landing Points | TeleGeography | Startup | No |
+| Embassies | Wikidata | Startup | No |
+| Cell Towers | OpenCellID | 7-day cache | Yes |
+| Reservoirs / Dams | USGS Water | Startup | No |
+| Border Crossings | US CBP | Startup | No |
+| KiwiSDR Nodes | KiwiSDR network | ~1h | No |
+
+**Signals and Cyber**
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| GPS Jamming | NAC-P analysis from ADS-B | ~60s | No |
+| Cyber Threats | abuse.ch | ~10min | No |
+| Power Outages | PowerOutage.us | Manual | No |
+| Internet Outages | Cloudflare + IODA | Manual | No |
+
+**Local / Network OSINT** (requires OSINT agent)
+
+| Layer | Source | Update | Key Required |
+|---|---|---|---|
+| WiFi/BT Devices | Kismet | ~15min | Optional |
+| IDS Alerts | Snort | ~15min | No |
+| Network Hosts | Nmap | ~15min | No |
+| Vulnerabilities | Nuclei | ~15min | No |
+
+### CCTV Sources (21 Ingestors)
+
+Transport for London JamCams, Singapore LTA, Austin TX TxDOT, NYC DOT, Tennessee DOT SmartWay, Clarksville City, Fort Campbell (KYTC), Clarksville Area Webcams, NC5 Skynet, WSMV Weather Cams, NPS Great Smoky Mountains, Resort Cams TN, Gatlinburg Tourist, Caltrans CA, Florida 511, Virginia DOT, Louisiana 511, Louisiana Wetmet, KSLA Static, Global OpenStreetMap crawling.
+
+### Additional Features
+
+* **Region Dossier** — Right-click anywhere for country profile (population, capital, languages, currencies, leader, government type), local Wikipedia summary
+* **News Feed** — 60+ RSS sources (Reuters, AP, BBC, Al Jazeera, NYT, defense/security outlets, regional conflict sources, cyber security feeds)
+* **Regional Feed** — Location-aware news from Google, Bing, DuckDuckGo, GDELT, Reddit, Bluesky, Mastodon (via SSE streaming)
+* **Radio Scanner** — Broadcastify top feeds + OpenMHz scanner systems with nearest-system lookup
+* **Global Markets Ticker** — Defense sector stocks (RTX, LMT, NOC, BA) and oil prices (WTI, Brent) via yfinance
+* **Flight Route Lookup** — Origin/destination for any tracked flight
+* **Satellite Pass Prediction** — SGP4-based AOS/TCA/LOS for any observer location
+* **Measurement Tool** — Point-to-point distance and bearing on the map
+* **API Key Management** — In-app settings panel for configuring all API keys
 
 ---
 
-## 🔧 Performance
+## Architecture
 
-The platform is optimized for handling massive real-time datasets:
+```
+ShadowLens/
+|
+|-- Frontend (Next.js, port 3000) ----- Docker container
+|   |-- MapLibre GL map with 37 data layers
+|   |-- News feed, radio scanner, markets ticker
+|   |-- F.R.I.D.A.Y. analysis panel
+|   |-- OSINT search bar (auto-detects input type)
+|
+|-- Backend (FastAPI, port 8001) ------- Docker container
+|   |-- Data fetcher scheduler (60+ sources)
+|   |-- AIS WebSocket client (real-time ships)
+|   |-- Carrier tracker (GDELT OSINT)
+|   |-- CCTV pipeline (21 ingestors)
+|   |-- Region dossier (Nominatim + RestCountries + Wikidata + Wikipedia)
+|   |-- Satellite pass predictor (SGP4)
+|   |-- Regional news aggregator (Google/Bing/Reddit/Bluesky/Mastodon)
+|
+|-- OSINT Agent (FastAPI, port 8002) --- Host process (not Docker)
+|   |-- 18+ security tool runners
+|   |-- F.R.I.D.A.Y. engine (FAISS RAG + LLM)
+|   |-- Deep search (auto-detection pipeline)
+|   |-- Job queue for async scans
+```
 
-* **Gzip Compression** — API payloads compressed ~92% (11.6 MB → 915 KB)
-* **ETag Caching** — `304 Not Modified` responses skip redundant JSON parsing
-* **Viewport Culling** — Only features within the visible map bounds (+20% buffer) are rendered
-* **Clustered Rendering** — Ships, CCTV, and earthquakes use MapLibre clustering to reduce feature count
+The backend runs inside Docker and reaches the OSINT agent on the host via `host.docker.internal:8002`.
+
+---
+
+## Project Structure
+
+```
+ShadowLens/
+|-- start.sh                        # One-command startup (Docker + OSINT Agent + F.R.I.D.A.Y.)
+|-- start.bat                       # Windows startup (dev mode)
+|-- docker-compose.yml              # Frontend + Backend containers
+|-- .env.example                    # Template for all environment variables
+|
+|-- backend/                        # FastAPI backend (Docker, port 8001 -> 8000)
+|   |-- main.py                     # API routes, middleware, OSINT/F.R.I.D.A.Y. proxy
+|   |-- services/
+|   |   |-- data_fetcher.py         # Core scheduler — fetches 60+ data sources
+|   |   |-- ais_stream.py           # AIS WebSocket client (real-time vessels)
+|   |   |-- carrier_tracker.py      # OSINT carrier position tracker
+|   |   |-- cctv_pipeline.py        # 21 CCTV camera ingestors
+|   |   |-- geopolitics.py          # GDELT + Ukraine frontline
+|   |   |-- region_dossier.py       # Right-click country/city intelligence
+|   |   |-- regional_feed.py        # Location-aware news + social media
+|   |   |-- osint_bridge.py         # Proxy to host OSINT agent
+|   |   |-- api_settings.py         # API key registry and management
+|   |   |-- network_utils.py        # HTTP client with curl fallback
+|   |   |-- radio_intercept.py      # Broadcastify + OpenMHz scanner feeds
+|   |   +-- liveuamap_scraper.py    # Ukraine conflict map scraper
+|
+|-- frontend/                       # Next.js frontend (Docker, port 3000)
+|   +-- src/
+|       |-- app/page.tsx            # Main dashboard — state, polling, layout
+|       +-- components/
+|           |-- MaplibreViewer.tsx   # Core map — all GeoJSON layers + rendering
+|           |-- NewsFeed.tsx        # News feed + entity panels + F.R.I.D.A.Y. chat
+|           |-- FindLocateBar.tsx   # OSINT search bar with type detection
+|           |-- WorldviewLeftPanel.tsx   # Data layer toggles
+|           |-- WorldviewRightPanel.tsx  # Recording, display, orbit tracking
+|           |-- SettingsPanel.tsx   # API key management UI
+|           |-- RadioInterceptPanel.tsx  # Scanner-style radio monitoring
+|           |-- MarketsPanel.tsx    # Defense stocks + oil ticker
+|           +-- ...                 # Legend, filters, onboarding, scale bar
+|
+|-- osint-agent/                    # Host-side OSINT engine (port 8002)
+|   |-- main.py                     # FastAPI — scan endpoints, F.R.I.D.A.Y. API
+|   |-- config.py                   # Tool detection, host geolocation
+|   |-- runners/                    # Tool wrappers
+|   |   |-- nmap.py                 # Port/service scanning (RFC1918 validated)
+|   |   |-- nuclei.py              # Vulnerability scanning
+|   |   |-- kismet.py              # WiFi/BT device tracking
+|   |   |-- snort.py               # IDS alert parsing
+|   |   |-- harvester.py           # theHarvester domain recon
+|   |   |-- spiderfoot.py          # SpiderFoot OSINT investigation
+|   |   |-- whatweb.py             # Web technology fingerprinting
+|   |   |-- deep_search.py         # Multi-tool OSINT (auto-detects input type)
+|   |   |-- person_search.py       # People lookup
+|   |   +-- autorecon.py           # Full reconnaissance framework
+|   +-- syd/                        # F.R.I.D.A.Y. engine
+|       |-- engine.py               # Core RAG pipeline
+|       |-- nmap_fact_extractor.py  # Nmap scan parser
+|       |-- bloodhound_fact_extractor.py  # AD attack path parser
+|       |-- volatility_fact_extractor.py  # Memory forensics parser
+|       +-- rag_data/               # FAISS indexes + knowledge chunks
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in your keys:
+
+```env
+# Required
+AIS_API_KEY=                    # Maritime vessel tracking (aisstream.io)
+
+# Recommended
+OPENSKY_CLIENT_ID=              # Flight data — higher rate limits (opensky-network.org)
+OPENSKY_CLIENT_SECRET=          # Paired with Client ID above
+
+# Optional
+OPENCELLID_API_KEY=             # Cell tower locations
+LTA_ACCOUNT_KEY=                # Singapore CCTV cameras
+TDOT_SMARTWAY_API_KEY=          # Tennessee DOT cameras
+
+# OSINT Tools (all optional, enable as needed)
+SHODAN_API_KEY=                 # Internet-wide scanner
+HIBP_API_KEY=                   # Breach database lookups
+VIRUSTOTAL_API_KEY=             # Malware/URL scanning
+CENSYS_API_ID=                  # Certificate/host search
+CENSYS_API_SECRET=              # Paired with Censys ID
+HUNTER_API_KEY=                 # Email finder
+GREYNOISE_API_KEY=              # Scanner intelligence
+ABUSEIPDB_API_KEY=              # IP reputation
+IPINFO_API_KEY=                 # IP geolocation
+NUMVERIFY_API_KEY=              # Phone number lookup
+KISMET_API_KEY=                 # Wireless IDS auth
+# See .env.example for the full list
+```
+
+---
+
+## API Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/live-data/fast` | Real-time tier: flights, ships, CCTV, GPS jamming, news (~60s) |
+| `GET /api/live-data/slow` | Cached tier: earthquakes, satellites, stocks, weather, GDELT (~5-30min) |
+| `GET /api/live-data/static` | Static tier: military bases, nuclear facilities, cables, embassies (~1h) |
+| `GET /api/live-data/osint` | Network OSINT: Kismet, Snort, Nmap, Nuclei results |
+| `GET /api/live-data/regional` | Location-filtered data + regional news/social media |
+| `GET /api/live-data/regional/stream` | SSE stream with progressive news chunks |
+| `GET /api/region-dossier` | Country profile, leader, Wikipedia summary for any coordinates |
+| `GET /api/satellite/passes` | SGP4 pass prediction for observer location |
+| `GET /api/route/{callsign}` | Flight route origin/destination lookup |
+| `POST /api/osint/scan` | Trigger nmap/nuclei/whatweb/harvester/spiderfoot scan |
+| `POST /api/osint/search` | Deep OSINT search (auto-detects input type) |
+| `POST /api/syd/query` | F.R.I.D.A.Y. analysis with scan context |
+| `POST /api/syd/chat` | F.R.I.D.A.Y. general chat |
+| `GET /api/settings/api-keys` | View configured API keys (obfuscated) |
+| `PUT /api/settings/api-keys` | Update an API key |
+| `GET /api/health` | Uptime, last update times, source counts |
+
+---
+
+## Performance
+
+* **Gzip Compression** — API payloads compressed ~92%
+* **ETag Caching** — 304 Not Modified responses skip redundant JSON parsing
+* **Viewport Culling** — Only features within visible map bounds (+20% buffer) are rendered
+* **Clustered Rendering** — Ships, CCTV, and earthquakes use MapLibre clustering
 * **Debounced Viewport Updates** — 300ms debounce prevents GeoJSON rebuild thrash during pan/zoom
 * **Position Interpolation** — Smooth 10s tick animation between data refreshes
-* **React.memo** — Heavy components wrapped to prevent unnecessary re-renders
 * **Coordinate Precision** — Lat/lng rounded to 5 decimals (~1m) to reduce JSON size
 
 ---
 
-## 📁 Project Structure
+## Disclaimer
 
-```
-ShadowLens/
-├── start.sh                        # One-command startup (Docker + OSINT Agent)
-├── docker-compose.yml              # Frontend + Backend containers
-│
-├── backend/                        # FastAPI backend (Docker container, port 8001)
-│   ├── main.py                     # API routes, middleware, OSINT/FRIDAY proxy
-│   ├── services/
-│   │   ├── data_fetcher.py         # Core scheduler — fetches all data sources
-│   │   ├── osint_bridge.py         # Proxy to OSINT agent (port 8002)
-│   │   ├── ais_stream.py           # AIS WebSocket client (25K+ vessels)
-│   │   ├── carrier_tracker.py      # OSINT carrier position tracker
-│   │   ├── cctv_pipeline.py        # Multi-source CCTV camera ingestion
-│   │   ├── geopolitics.py          # GDELT + Ukraine frontline fetcher
-│   │   ├── region_dossier.py       # Right-click country/city intelligence
-│   │   ├── network_utils.py        # HTTP client with curl fallback
-│   │   └── regional_feed.py        # Regional news/threat feeds
-│
-├── frontend/                       # Next.js frontend (Docker container, port 3000)
-│   └── src/
-│       ├── app/page.tsx            # Main dashboard — state, polling, layout
-│       └── components/
-│           ├── MaplibreViewer.tsx   # Core map — all GeoJSON layers
-│           ├── NewsFeed.tsx         # SIGINT feed + entity panels + F.R.I.D.A.Y.
-│           ├── WorldviewLeftPanel.tsx   # Data layer toggles
-│           ├── WorldviewRightPanel.tsx  # Search + filter sidebar
-│           └── ...                 # Markets, Radio, Legend, Settings, etc.
-│
-├── osint-agent/                    # Host-side OSINT engine (port 8002)
-│   ├── main.py                     # FastAPI — scan endpoints, F.R.I.D.A.Y. API
-│   ├── config.py                   # Tool detection, host location
-│   ├── runners/                    # Tool wrappers (nmap, nuclei, spiderfoot, etc.)
-│   └── syd/                        # F.R.I.D.A.Y. engine package
-│       ├── engine.py               # Core 3-stage RAG pipeline (FridayEngine)
-│       ├── nmap_fact_extractor.py  # Nmap scan parser
-│       ├── bloodhound_fact_extractor.py  # AD attack path parser
-│       ├── volatility_fact_extractor.py  # Memory forensics parser
-│       ├── models/                 # LLM model (Qwen 2.5 14B GGUF)
-│       └── rag_data/               # FAISS indexes + knowledge chunks
-```
-
----
-
-## 🔑 Environment Variables
-
-Create a `.env` file in the `backend/` directory:
-
-```env
-# Required
-AIS_API_KEY=your_aisstream_key                # Maritime vessel tracking (aisstream.io)
-
-# Optional (enhances data quality)
-OPENSKY_CLIENT_ID=your_opensky_client_id      # OAuth2 — higher rate limits for flight data
-OPENSKY_CLIENT_SECRET=your_opensky_secret     # OAuth2 — paired with Client ID above
-LTA_ACCOUNT_KEY=your_lta_key                  # Singapore CCTV cameras
-```
-
----
-
-## ⚠️ Disclaimer
-
-This is an **educational and research tool** built entirely on publicly available, open-source intelligence (OSINT) data. No classified, restricted, or non-public data sources are used. Carrier positions are estimates based on public reporting. The military-themed UI is purely aesthetic.
+This is an **educational and research tool** built entirely on publicly available, open-source intelligence (OSINT) data. No classified, restricted, or non-public data sources are used. Carrier positions are estimates based on public reporting.
 
 **Do not use this tool for any operational, military, or intelligence purpose.**
 
 ---
 
-## 📜 License
+## License
 
 This project is for educational and personal research purposes. See individual API provider terms of service for data usage restrictions.
-
----
-
-<p align="center">
-  <sub>Built with ☕ and too many API calls</sub>
-</p>
