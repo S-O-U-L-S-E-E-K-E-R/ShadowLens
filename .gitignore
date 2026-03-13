@@ -45,6 +45,7 @@ Thumbs.db
 # IDEs and Editors
 .vscode/
 .idea/
+*.swp
 *.suo
 *.ntvs*
 *.njsproj
@@ -65,6 +66,7 @@ osint-agent/__pycache__/
 # Temp files
 tmp/
 *.log
+hexstrike.log
 *.tmp
 *.bak
 out.txt

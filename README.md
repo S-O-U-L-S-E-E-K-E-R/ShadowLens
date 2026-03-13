@@ -37,28 +37,30 @@ Deep OSINT search auto-detects input type (IP, domain, email, phone, username, h
 ```bash
 git clone https://github.com/S-O-U-L-S-E-E-K-E-R/ShadowLens.git
 cd ShadowLens
-cp .env.example .env
+
+# First time: run setup to install everything
+chmod +x setup.sh
+./setup.sh
+
 # Edit .env with your API keys (AIS_API_KEY required at minimum)
+nano .env
+
+# Launch
 ./start.sh
 ```
 
-`start.sh` does three things:
+`setup.sh` handles the full first-time install:
+1. Creates `.env` from template
+2. Sets up OSINT agent Python venv and dependencies
+3. Installs OSINT tools via apt/pip/go (nmap, nuclei, whatweb, sherlock, etc.)
+4. Builds Docker images
+
+`start.sh` launches everything:
 1. Starts Docker containers (frontend on port 3000, backend on port 8001)
-2. Starts the OSINT agent on port 8002 (requires Python venv setup — see below)
+2. Starts the OSINT agent on port 8002
 3. Waits for F.R.I.D.A.Y. engine to initialize
 
 Open `http://localhost:3000` to view the dashboard.
-
-### OSINT Agent Setup (First Time Only)
-
-The OSINT agent runs on the host (not in Docker) so it can access local tools like nmap and kismet:
-
-```bash
-cd osint-agent
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
 
 ### Windows
 
@@ -87,8 +89,32 @@ cd /path/to/ShadowLens
 
 * **Docker** and **docker compose** (for containerized deployment)
 * **Python 3.10+** with venv (for OSINT agent)
-* **Node.js 18+** and **npm** (for development mode)
+* **Node.js 18+** and **npm** (for development mode only)
+* **Go** (optional — for installing nuclei, subfinder, phoneinfoga)
 * **NVIDIA GPU** (optional — accelerates F.R.I.D.A.Y. inference, falls back to CPU)
+
+The `setup.sh` script auto-installs these OSINT tools:
+
+| Tool | Install Method | Purpose |
+|---|---|---|
+| nmap | apt | Port and service scanning |
+| nuclei | go install | Vulnerability scanning |
+| whatweb | apt | Web technology fingerprinting |
+| theHarvester | pip | Email and domain OSINT |
+| sherlock | pip | Username search across sites |
+| h8mail | pip | Breach data lookups |
+| maigret | pip | Username search (extended) |
+| holehe | pip | Email registration checker |
+| subfinder | go install | Subdomain discovery |
+| dnsrecon | apt | DNS enumeration |
+| whois | apt | Domain registration lookup |
+| dmitry | apt | Host intelligence gathering |
+| shodan | pip | Internet-wide scanner CLI |
+| spiderfoot | pip | OSINT investigation framework |
+| autorecon | pip | Full reconnaissance framework |
+| phoneinfoga | go install | Phone number OSINT |
+| kismet | apt | WiFi/Bluetooth monitoring |
+| snort | apt | Network intrusion detection |
 
 ---
 
@@ -247,6 +273,7 @@ The backend runs inside Docker and reaches the OSINT agent on the host via `host
 
 ```
 ShadowLens/
+|-- setup.sh                        # First-time setup (installs all tools + builds Docker)
 |-- start.sh                        # One-command startup (Docker + OSINT Agent + F.R.I.D.A.Y.)
 |-- start.bat                       # Windows startup (dev mode)
 |-- docker-compose.yml              # Frontend + Backend containers
