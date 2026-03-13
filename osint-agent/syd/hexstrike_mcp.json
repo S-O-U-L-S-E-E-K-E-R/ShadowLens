@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "hexstrike-ai": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["/home/soul/hexstrike-ai/start_hexstrike_mcp.sh"],
+      "env": {}
+    }
+  }
+}

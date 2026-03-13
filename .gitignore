@@ -1,0 +1,107 @@
+# shadowlens .gitignore
+# ----------------------
+
+# Dependencies
+node_modules/
+venv/
+env/
+.venv/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python caches & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Application Specific Caches & DBs
+**/ais_cache.json
+backend/carrier_cache.json
+backend/cctv.db
+frontend/cctv.db
+*.sqlite3
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vercel / Deployment
+.vercel
+
+# Kismet
+kismet info
+
+# OSINT agent env
+osint-agent/.env
+osint-agent/venv/
+osint-agent/__pycache__/
+
+# Temp files
+tmp/
+*.log
+*.tmp
+*.bak
+out.txt
+out_sys.txt
+rss_output.txt
+merged.txt
+tmp_fast.json
+TheAirTraffic Database.xlsx
+
+# Debug dumps & release artifacts
+backend/dump.json
+backend/debug_fast.json
+*.zip
+.git_backup/
+
+# Test & debug files
+backend/test_*.py
+backend/services/test_*.py
+backend/*.json
+!backend/package.json
+!backend/package-lock.json
+backend/*.txt
+!backend/requirements.txt
+frontend/build_*.txt
+frontend/server_logs*.txt
+frontend/errors.txt
+jobs.json
+
+# LLM models (too large for git)
+*.gguf
+
+# Misc scripts not needed in repo
+backend/analyze_xlsx.py
+backend/check_regions.py
+backend/clean_osm_cctvs.py
+backend/extract_ovens.py
+backend/liveua_test.html
+clean_zip.py
+zip_repo.py
+start-backend.js
