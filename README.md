@@ -13,15 +13,23 @@ Built with **Next.js 16**, **MapLibre GL**, **FastAPI**, and **Python**.
 
 ### F.R.I.D.A.Y. — AI Analysis Engine
 
-ShadowLens includes **F.R.I.D.A.Y.**, an AI analysis engine powered by **Claude Code CLI**. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
+ShadowLens includes **F.R.I.D.A.Y.**, an AI analysis engine with a **switchable LLM backend**. Choose between **Claude Code CLI** or a **local Ollama model** — toggle from the in-app Settings panel. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
 
 * **Instant fact extraction** — Deterministic parsing of entity data (no AI, instant)
-* **Deep LLM analysis** — Claude-powered RAG pipeline with FAISS indexes for vulnerability assessment, risk analysis, and recommendations
+* **Deep LLM analysis** — RAG pipeline with FAISS indexes for vulnerability assessment, risk analysis, and recommendations
 * **Anti-hallucination validation** — 3-stage pipeline ensures answers are grounded in actual data
 * **Specialized modules** — Nmap scan parser, BloodHound AD attack path analysis, Volatility memory forensics
-* **Tool access** — F.R.I.D.A.Y. can run OSINT tools directly when answering research questions
+* **Tool access** — F.R.I.D.A.Y. can run OSINT tools directly when answering research questions (Claude Code only — Ollama falls back to Claude for tool use)
+* **Dual LLM backend** — Switch between Claude Code CLI and Ollama (local LLM) from the Settings panel at any time
 
-Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated on the host.
+#### LLM Backend Options
+
+| Backend | Requires | Tool Use | Best For |
+|---|---|---|---|
+| **Claude Code CLI** (default) | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed + authenticated | Full (Bash, WebSearch, HexStrike MCP) | High-quality analysis, OSINT research |
+| **Ollama** (local) | [Ollama](https://ollama.com) installed + model pulled | No (falls back to Claude for tool calls) | Offline use, privacy, no API costs |
+
+To use Ollama: install it (`curl -fsSL https://ollama.com/install.sh | sh`), pull a model (`ollama pull llama3`), then switch from the Settings panel. The model dropdown auto-populates from your Ollama instance.
 
 ### OSINT Agent — 18+ Security Tools
 
@@ -93,7 +101,8 @@ cd /path/to/ShadowLens
 * **Docker** and **docker compose** (for containerized deployment)
 * **Python 3.10+** with venv (for OSINT agent)
 * **Node.js 18+** and **npm** (for development mode only)
-* **[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)** (required for F.R.I.D.A.Y. AI analysis — must be installed and authenticated on the host)
+* **[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)** (for F.R.I.D.A.Y. AI analysis with tool access — must be installed and authenticated on the host)
+* **[Ollama](https://ollama.com)** (optional alternative — local LLM backend, no API key needed)
 * **Go** (optional — for installing nuclei, subfinder, phoneinfoga)
 
 The `setup.sh` script auto-installs these OSINT tools:
@@ -238,6 +247,8 @@ Transport for London JamCams, Singapore LTA, Austin TX TxDOT, NYC DOT, Tennessee
 * **Satellite Pass Prediction** — SGP4-based AOS/TCA/LOS for any observer location
 * **Measurement Tool** — Point-to-point distance and bearing on the map
 * **API Key Management** — In-app settings panel for configuring all API keys
+* **LLM Provider Switch** — Toggle between Claude Code CLI and Ollama (local LLM) from Settings
+* **AI Track Analysis** — `/api/analyze/{type}/{id}` provides LLM-powered threat assessment for any entity (supports Claude API, Ollama, and rule-based fallback)
 
 ---
 
@@ -264,6 +275,7 @@ ShadowLens/
 |-- OSINT Agent (FastAPI, port 8002) --- Host process (not Docker)
 |   |-- 18+ security tool runners
 |   |-- F.R.I.D.A.Y. engine (FAISS RAG + LLM)
+|   |-- LLM provider manager (Claude Code CLI / Ollama switch)
 |   |-- Deep search (auto-detection pipeline)
 |   |-- Job queue for async scans
 ```
@@ -314,7 +326,7 @@ ShadowLens/
 |
 |-- osint-agent/                    # Host-side OSINT engine (port 8002)
 |   |-- main.py                     # FastAPI — scan endpoints, F.R.I.D.A.Y. API
-|   |-- config.py                   # Tool detection, host geolocation
+|   |-- config.py                   # Tool detection, host geolocation, LLM provider config
 |   |-- runners/                    # Tool wrappers
 |   |   |-- nmap.py                 # Port/service scanning (RFC1918 validated)
 |   |   |-- nuclei.py              # Vulnerability scanning
@@ -327,7 +339,7 @@ ShadowLens/
 |   |   |-- person_search.py       # People lookup
 |   |   +-- autorecon.py           # Full reconnaissance framework
 |   +-- syd/                        # F.R.I.D.A.Y. engine
-|       |-- engine.py               # Core RAG pipeline
+|       |-- engine.py               # Core RAG pipeline (Claude Code + Ollama dual backend)
 |       |-- nmap_fact_extractor.py  # Nmap scan parser
 |       |-- bloodhound_fact_extractor.py  # AD attack path parser
 |       |-- volatility_fact_extractor.py  # Memory forensics parser
@@ -352,6 +364,11 @@ OPENSKY_CLIENT_SECRET=          # Paired with Client ID above
 OPENCELLID_API_KEY=             # Cell tower locations
 LTA_ACCOUNT_KEY=                # Singapore CCTV cameras
 TDOT_SMARTWAY_API_KEY=          # Tennessee DOT cameras
+
+# LLM Backend (optional — defaults to Claude Code CLI)
+LLM_PROVIDER=claude             # "claude" or "ollama"
+OLLAMA_BASE_URL=http://localhost:11434  # Ollama API endpoint
+OLLAMA_MODEL=llama3             # Ollama model name
 
 # OSINT Tools (all optional, enable as needed)
 SHODAN_API_KEY=                 # Internet-wide scanner
@@ -387,6 +404,10 @@ KISMET_API_KEY=                 # Wireless IDS auth
 | `POST /api/osint/search` | Deep OSINT search (auto-detects input type) |
 | `POST /api/syd/query` | F.R.I.D.A.Y. analysis with scan context |
 | `POST /api/syd/chat` | F.R.I.D.A.Y. general chat |
+| `GET /api/analyze/{type}/{id}` | AI-powered entity threat assessment (Claude/Ollama/rule-based) |
+| `GET /api/llm/status` | Current LLM provider, backend availability |
+| `PUT /api/llm/provider` | Switch between Claude Code and Ollama |
+| `GET /api/ollama/models` | List available Ollama models |
 | `GET /api/settings/api-keys` | View configured API keys (obfuscated) |
 | `PUT /api/settings/api-keys` | Update an API key |
 | `GET /api/health` | Uptime, last update times, source counts |
