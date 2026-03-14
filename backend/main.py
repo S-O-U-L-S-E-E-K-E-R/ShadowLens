@@ -531,6 +531,45 @@ async def api_friday_extract(body: FridayAnalyzeRequest):
     return await asyncio.to_thread(friday_extract, body.scan_data, body.module)
 
 
+# ---------------------------------------------------------------------------
+# LLM Provider Settings — proxy to OSINT agent
+# ---------------------------------------------------------------------------
+
+@app.get("/api/llm/status")
+async def api_llm_status():
+    """Get current LLM provider status from the OSINT agent."""
+    import asyncio
+    from services.osint_bridge import _get
+    return await asyncio.to_thread(_get, "/llm/status")
+
+
+class LlmProviderUpdate(BaseModel):
+    provider: str
+    ollama_base_url: str = ""
+    ollama_model: str = ""
+
+
+@app.put("/api/llm/provider")
+async def api_set_llm_provider(body: LlmProviderUpdate):
+    """Switch LLM provider on the OSINT agent."""
+    import asyncio
+    from services.osint_bridge import _put
+    payload = {"provider": body.provider}
+    if body.ollama_base_url:
+        payload["ollama_base_url"] = body.ollama_base_url
+    if body.ollama_model:
+        payload["ollama_model"] = body.ollama_model
+    return await asyncio.to_thread(_put, "/llm/provider", payload)
+
+
+@app.get("/api/ollama/models")
+async def api_ollama_models():
+    """List available Ollama models from the OSINT agent."""
+    import asyncio
+    from services.osint_bridge import _get
+    return await asyncio.to_thread(_get, "/ollama/models")
+
+
 @app.get("/api/debug-latest")
 async def debug_latest_data():
     return list(get_latest_data().keys())
@@ -836,10 +875,14 @@ Provide a brief but thorough intelligence assessment including:
 4. Threat assessment (LOW/MEDIUM/HIGH/CRITICAL)
 5. Recommended monitoring priority"""
 
-    # Try to use Claude API if ANTHROPIC_API_KEY is set
+    # Determine LLM provider preference
+    llm_provider = os.environ.get("LLM_PROVIDER", "claude")
+
+    # Try Claude API if provider is claude and ANTHROPIC_API_KEY is set
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if api_key:
+    if llm_provider == "claude" and api_key:
         try:
+            import requests
             resp = requests.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -860,6 +903,32 @@ Provide a brief but thorough intelligence assessment including:
                 return {"analysis": text, "source": "claude-haiku", "entity": entity_data}
         except Exception as e:
             logger.warning(f"Claude API analysis failed: {e}")
+
+    # Try Ollama if provider is ollama (or Claude failed)
+    ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model = os.environ.get("OLLAMA_MODEL", "llama3")
+    if llm_provider == "ollama" or (llm_provider == "claude" and not api_key):
+        try:
+            import urllib.request
+            payload = json_mod.dumps({
+                "model": ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_predict": 1024},
+            }).encode()
+            req = urllib.request.Request(
+                f"{ollama_url}/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            resp = urllib.request.urlopen(req, timeout=60)
+            data = json_mod.loads(resp.read())
+            text = data.get("response", "").strip()
+            if text:
+                return {"analysis": text, "source": f"ollama/{ollama_model}", "entity": entity_data}
+        except Exception as e:
+            logger.warning(f"Ollama analysis failed: {e}")
 
     # Fallback: rule-based analysis
     analysis = _rule_based_analysis(entity_type, entity_data)

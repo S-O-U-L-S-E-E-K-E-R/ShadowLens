@@ -76,7 +76,7 @@ SERVICE_SYNONYMS = {
 
 
 class FridayEngine:
-    """Core F.R.I.D.A.Y. analysis engine — uses Claude Code CLI as the LLM backend."""
+    """Core F.R.I.D.A.Y. analysis engine — uses Claude Code CLI or Ollama as the LLM backend."""
 
     def __init__(self):
         self.llm = None
@@ -88,6 +88,7 @@ class FridayEngine:
         self._loading = False
         self._lock = threading.Lock()
         self._claude_path: Optional[str] = None
+        self._ollama_available: bool = False
 
     @property
     def model_path(self) -> Path:
@@ -97,6 +98,11 @@ class FridayEngine:
     def model_available(self) -> bool:
         return self._claude_path is not None
 
+    @property
+    def _llm_provider(self) -> str:
+        """Current LLM provider — 'claude' or 'ollama'."""
+        return os.environ.get("LLM_PROVIDER", "claude")
+
     def status(self) -> dict:
         modules = {}
         for mod in ['nmap', 'bloodhound', 'volatility']:
@@ -105,13 +111,16 @@ class FridayEngine:
                 'extractor_loaded': mod in self.fact_extractors,
                 'chunks': len(self.chunks.get(mod, [])),
             }
+        provider = self._llm_provider
         return {
             'ready': self.ready,
             'loading': self._loading,
-            'model_available': self.model_available,
-            'model_path': self._claude_path or 'claude (not found)',
+            'model_available': self.model_available or self._ollama_available,
+            'model_path': self._claude_path or 'claude (not found)' if provider == 'claude' else os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
             'llm_loaded': self.llm is not None,
-            'llm_backend': 'claude-code',
+            'llm_backend': provider,
+            'ollama_available': self._ollama_available,
+            'ollama_model': os.environ.get("OLLAMA_MODEL", "llama3"),
             'embed_model_loaded': self.embed_model is not None,
             'modules': modules,
         }
@@ -140,11 +149,13 @@ class FridayEngine:
             logger.info("F.R.I.D.A.Y.: Loading fact extractors...")
             self._load_fact_extractors()
 
-            logger.info("F.R.I.D.A.Y.: Verifying Claude Code CLI...")
+            logger.info("F.R.I.D.A.Y.: Verifying LLM backends...")
             self._load_llm()
+            self._probe_ollama()
 
+            provider = self._llm_provider
             self.ready = True
-            logger.info("F.R.I.D.A.Y.: Engine ready. Backend: Claude Code CLI.")
+            logger.info(f"F.R.I.D.A.Y.: Engine ready. Active backend: {provider}. Claude={'ok' if self._claude_path else 'N/A'}, Ollama={'ok' if self._ollama_available else 'N/A'}.")
         except Exception as e:
             logger.error(f"F.R.I.D.A.Y.: Initialization failed: {e}")
             import traceback
@@ -209,7 +220,8 @@ class FridayEngine:
                     claude_path = p
                     break
         if not claude_path:
-            raise RuntimeError("Claude Code CLI not found.")
+            logger.warning("F.R.I.D.A.Y.: Claude Code CLI not found — Claude backend unavailable.")
+            return
         try:
             result = subprocess.run(
                 [claude_path, "--version"],
@@ -221,9 +233,24 @@ class FridayEngine:
                 self._claude_path = claude_path
                 self.llm = "claude"
             else:
-                raise RuntimeError(f"Claude CLI check failed: {result.stderr}")
+                logger.warning(f"F.R.I.D.A.Y.: Claude CLI check failed: {result.stderr}")
         except subprocess.TimeoutExpired:
-            raise RuntimeError("Claude CLI timed out during version check")
+            logger.warning("F.R.I.D.A.Y.: Claude CLI timed out during version check")
+
+    def _probe_ollama(self):
+        """Check if Ollama is reachable."""
+        import urllib.request
+        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        try:
+            req = urllib.request.Request(f"{ollama_url}/api/tags", headers={"User-Agent": "ShadowLens/1.0"})
+            resp = urllib.request.urlopen(req, timeout=5)
+            if resp.status == 200:
+                self._ollama_available = True
+                logger.info(f"F.R.I.D.A.Y.: Ollama reachable at {ollama_url}")
+            else:
+                logger.warning(f"F.R.I.D.A.Y.: Ollama returned status {resp.status}")
+        except Exception as e:
+            logger.debug(f"F.R.I.D.A.Y.: Ollama not reachable at {ollama_url}: {e}")
 
     # ------------------------------------------------------------------
     # Claude CLI interface
@@ -285,6 +312,45 @@ class FridayEngine:
         except Exception as e:
             logger.error(f"F.R.I.D.A.Y.: Claude CLI exception: {e}")
             return f"[F.R.I.D.A.Y. Error] Failed to reach Claude: {e}"
+
+    def _call_ollama(self, prompt: str, timeout: int = 120) -> str:
+        """Call Ollama API and return the response."""
+        import urllib.request
+        ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        model = os.environ.get("OLLAMA_MODEL", "llama3")
+        try:
+            payload = json.dumps({
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_predict": 2048},
+            }).encode()
+            req = urllib.request.Request(
+                f"{ollama_url}/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "ShadowLens/1.0"},
+                method="POST",
+            )
+            resp = urllib.request.urlopen(req, timeout=timeout)
+            data = json.loads(resp.read())
+            return data.get("response", "").strip()
+        except Exception as e:
+            logger.error(f"F.R.I.D.A.Y.: Ollama error: {e}")
+            return f"[F.R.I.D.A.Y. Error] Ollama request failed: {e}"
+
+    def _call_llm(self, prompt: str, use_tools: bool = False, timeout: int = 120) -> str:
+        """Route to the active LLM provider."""
+        provider = self._llm_provider
+        if provider == "ollama" and self._ollama_available:
+            # Ollama doesn't support tool use — fall back to Claude for OSINT tool calls
+            if use_tools and self._claude_path:
+                return self._call_claude(prompt, use_tools=True, timeout=timeout)
+            return self._call_ollama(prompt, timeout=timeout)
+        if self._claude_path:
+            return self._call_claude(prompt, use_tools=use_tools, timeout=timeout)
+        if self._ollama_available:
+            return self._call_ollama(prompt, timeout=timeout)
+        return "[F.R.I.D.A.Y. Error] No LLM backend available. Configure Claude Code CLI or Ollama."
 
     def _needs_osint(self, question: str) -> bool:
         """Detect if the question requires OSINT tools or web research."""
@@ -395,8 +461,8 @@ class FridayEngine:
         """
         if not self.ready:
             return {"error": "F.R.I.D.A.Y. engine not ready. Still loading.", "ready": False}
-        if not self.llm:
-            return {"error": "Claude Code CLI not available.", "ready": True}
+        if not self.llm and not self._ollama_available:
+            return {"error": "No LLM backend available. Configure Claude Code CLI or Ollama.", "ready": True}
 
         entity_type = self._detect_entity_type(context)
         needs_osint = self._needs_osint(question)
@@ -440,7 +506,7 @@ class FridayEngine:
         system_prompt = self._build_scan_prompt(module, facts_text, context_text)
         user_message = f"Question: {question}\n\nAnswer based on the facts above:"
 
-        answer = self._call_claude(f"{system_prompt}\n\n---\n\n{user_message}")
+        answer = self._call_llm(f"{system_prompt}\n\n---\n\n{user_message}")
 
         validation = self._validate(answer, facts, module)
         if not validation['valid']:
@@ -490,7 +556,7 @@ class FridayEngine:
             f"{self._format_history(history)}"
             f"---\n\nCurrent question: {question}"
         )
-        answer = self._call_claude(prompt)
+        answer = self._call_llm(prompt)
         return {
             'answer': answer,
             'mode': 'entity_analysis',
@@ -656,7 +722,7 @@ class FridayEngine:
             f"{self._format_history(history)}"
             f"---\n\nUser request: {question}"
         )
-        answer = self._call_claude(prompt, use_tools=True, timeout=600)
+        answer = self._call_llm(prompt, use_tools=True, timeout=600)
 
         # Extract geolocatable data from the response for map plotting
         locations = self._extract_locations_from_answer(answer, question)
@@ -723,8 +789,8 @@ class FridayEngine:
                 f"{self._format_history(history)}"
                 f"---\n\nUser request: {question}"
             )
-            answer = self._call_claude(prompt)
-            # Try to extract locations from Claude's response
+            answer = self._call_llm(prompt)
+            # Try to extract locations from the LLM's response
             loc_pattern = re.compile(r'LOCATION:\s*(.+?)(?:\n|$)', re.IGNORECASE)
             for m in loc_pattern.finditer(answer):
                 loc_text = m.group(1).strip().rstrip('.')
@@ -767,7 +833,7 @@ class FridayEngine:
             f"{self._format_history(history)}"
             f"---\n\nCurrent question: {question}"
         )
-        answer = self._call_claude(prompt)
+        answer = self._call_llm(prompt)
         return {
             'answer': answer,
             'mode': 'general',

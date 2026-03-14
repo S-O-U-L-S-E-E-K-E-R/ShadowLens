@@ -58,6 +58,24 @@ def _post(endpoint: str, json_data: dict, read_timeout: int = READ_TIMEOUT) -> d
     return {"status": "unavailable", "data": []}
 
 
+def _put(endpoint: str, json_data: dict, read_timeout: int = READ_TIMEOUT) -> dict:
+    """PUT request to the OSINT agent."""
+    try:
+        resp = requests.put(
+            f"{OSINT_AGENT_URL}{endpoint}",
+            json=json_data,
+            timeout=(CONNECT_TIMEOUT, read_timeout),
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(f"OSINT agent PUT {endpoint} returned {resp.status_code}")
+    except requests.ConnectionError:
+        logger.debug(f"OSINT agent not reachable at {OSINT_AGENT_URL}")
+    except Exception as e:
+        logger.warning(f"OSINT bridge PUT error on {endpoint}: {e}")
+    return {"status": "unavailable", "data": []}
+
+
 def fetch_kismet_devices() -> list:
     """Fetch WiFi/BT devices from Kismet via the OSINT agent."""
     return _get("/kismet/devices")

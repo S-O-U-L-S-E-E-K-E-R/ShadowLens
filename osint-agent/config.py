@@ -134,6 +134,28 @@ NMAP_ALLOWED_RANGES = os.environ.get("NMAP_ALLOWED_RANGES", "10.0.0.0/8,172.16.0
 RESULTS_DIR = os.environ.get("OSINT_RESULTS_DIR", "/tmp/osint-results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# LLM Provider — "claude" (default) or "ollama"
+# ---------------------------------------------------------------------------
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "claude")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
+
+
+def get_llm_provider() -> str:
+    return os.environ.get("LLM_PROVIDER", "claude")
+
+
+def set_llm_provider(provider: str):
+    os.environ["LLM_PROVIDER"] = provider
+
+
+def get_ollama_config() -> dict:
+    return {
+        "base_url": os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+        "model": os.environ.get("OLLAMA_MODEL", "llama3"),
+    }
+
 
 def detect_tools() -> dict:
     """Return availability status for each tool."""

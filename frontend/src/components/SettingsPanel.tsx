@@ -3,7 +3,7 @@
 import { API_BASE } from "@/lib/api";
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, ExternalLink, Key, Shield, X, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, ExternalLink, Key, Shield, X, Save, ChevronDown, ChevronUp, Brain, Cpu } from "lucide-react";
 
 interface ApiEntry {
     id: string;
@@ -34,12 +34,67 @@ const CATEGORY_COLORS: Record<string, string> = {
     "Local Tools": "text-teal-400 border-teal-500/30 bg-teal-950/20",
 };
 
+interface LlmStatus {
+    provider: string;
+    claude_available: boolean;
+    ollama_available: boolean;
+    ollama: { base_url: string; model: string };
+}
+
 const SettingsPanel = React.memo(function SettingsPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
     const [apis, setApis] = useState<ApiEntry[]>([]);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
     const [saving, setSaving] = useState(false);
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["Aviation", "Maritime"]));
+
+    // LLM provider state
+    const [llmStatus, setLlmStatus] = useState<LlmStatus | null>(null);
+    const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+    const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
+    const [ollamaModel, setOllamaModel] = useState("llama3");
+    const [llmSaving, setLlmSaving] = useState(false);
+
+    const fetchLlmStatus = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/llm/status`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.provider) {
+                    setLlmStatus(data);
+                    if (data.ollama?.base_url) setOllamaUrl(data.ollama.base_url);
+                    if (data.ollama?.model) setOllamaModel(data.ollama.model);
+                }
+            }
+        } catch { /* agent may be offline */ }
+    }, []);
+
+    const fetchOllamaModels = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/api/ollama/models`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.models) setOllamaModels(data.models);
+            }
+        } catch { /* ignore */ }
+    }, []);
+
+    const switchProvider = useCallback(async (provider: string, url?: string, model?: string) => {
+        setLlmSaving(true);
+        try {
+            const res = await fetch(`${API_BASE}/api/llm/provider`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider,
+                    ollama_base_url: url || ollamaUrl,
+                    ollama_model: model || ollamaModel,
+                }),
+            });
+            if (res.ok) await fetchLlmStatus();
+        } catch { /* ignore */ }
+        finally { setLlmSaving(false); }
+    }, [ollamaUrl, ollamaModel, fetchLlmStatus]);
 
     const fetchKeys = useCallback(async () => {
         try {
@@ -54,8 +109,12 @@ const SettingsPanel = React.memo(function SettingsPanel({ isOpen, onClose }: { i
     }, []);
 
     useEffect(() => {
-        if (isOpen) fetchKeys();
-    }, [isOpen, fetchKeys]);
+        if (isOpen) {
+            fetchKeys();
+            fetchLlmStatus();
+            fetchOllamaModels();
+        }
+    }, [isOpen, fetchKeys, fetchLlmStatus, fetchOllamaModels]);
 
     const startEditing = (api: ApiEntry) => {
         setEditingId(api.id);
@@ -145,6 +204,89 @@ const SettingsPanel = React.memo(function SettingsPanel({ isOpen, onClose }: { i
                                 <p className="text-[10px] text-gray-400 font-mono leading-relaxed">
                                     API keys are stored locally in the backend <span className="text-cyan-400">.env</span> file. Keys marked with <Key size={8} className="inline text-yellow-500" /> are required for full functionality. Public APIs need no key.
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* LLM Provider Switch */}
+                        <div className="mx-4 mt-3 rounded-lg border border-purple-900/40 bg-purple-950/10 overflow-hidden">
+                            <div className="px-4 py-2.5 bg-purple-900/20 flex items-center gap-2">
+                                <Brain size={12} className="text-purple-400" />
+                                <span className="text-[9px] font-mono tracking-widest font-bold text-purple-400">F.R.I.D.A.Y. LLM BACKEND</span>
+                            </div>
+                            <div className="px-4 py-3 space-y-3">
+                                {/* Toggle */}
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => switchProvider("claude")}
+                                        disabled={llmSaving}
+                                        className={`flex-1 py-2 rounded border text-[10px] font-mono transition-all flex items-center justify-center gap-1.5 ${
+                                            llmStatus?.provider === "claude"
+                                                ? "border-purple-500/60 bg-purple-500/20 text-purple-300"
+                                                : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                                        }`}
+                                    >
+                                        <Brain size={10} />
+                                        CLAUDE CODE
+                                        {llmStatus?.claude_available && <span className="w-1.5 h-1.5 rounded-full bg-green-400 ml-1" />}
+                                        {llmStatus?.claude_available === false && <span className="w-1.5 h-1.5 rounded-full bg-red-400 ml-1" />}
+                                    </button>
+                                    <button
+                                        onClick={() => switchProvider("ollama")}
+                                        disabled={llmSaving}
+                                        className={`flex-1 py-2 rounded border text-[10px] font-mono transition-all flex items-center justify-center gap-1.5 ${
+                                            llmStatus?.provider === "ollama"
+                                                ? "border-cyan-500/60 bg-cyan-500/20 text-cyan-300"
+                                                : "border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-400"
+                                        }`}
+                                    >
+                                        <Cpu size={10} />
+                                        OLLAMA (LOCAL)
+                                        {llmStatus?.ollama_available && <span className="w-1.5 h-1.5 rounded-full bg-green-400 ml-1" />}
+                                        {llmStatus?.ollama_available === false && <span className="w-1.5 h-1.5 rounded-full bg-red-400 ml-1" />}
+                                    </button>
+                                </div>
+
+                                {/* Ollama config (shown when ollama selected or available) */}
+                                {(llmStatus?.provider === "ollama" || llmStatus?.ollama_available) && (
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="text-[8px] text-gray-500 font-mono block mb-1">OLLAMA URL</label>
+                                            <input
+                                                type="text"
+                                                value={ollamaUrl}
+                                                onChange={(e) => setOllamaUrl(e.target.value)}
+                                                onBlur={() => { if (llmStatus?.provider === "ollama") switchProvider("ollama"); }}
+                                                className="w-full bg-black/60 border border-gray-800 rounded px-2 py-1.5 text-[10px] font-mono text-cyan-300 outline-none focus:border-cyan-500/50"
+                                                placeholder="http://localhost:11434"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[8px] text-gray-500 font-mono block mb-1">MODEL</label>
+                                            {ollamaModels.length > 0 ? (
+                                                <select
+                                                    value={ollamaModel}
+                                                    onChange={(e) => { const v = e.target.value; setOllamaModel(v); if (llmStatus?.provider === "ollama") switchProvider("ollama", undefined, v); }}
+                                                    className="w-full bg-black/60 border border-gray-800 rounded px-2 py-1.5 text-[10px] font-mono text-cyan-300 outline-none focus:border-cyan-500/50"
+                                                >
+                                                    {ollamaModels.map(m => <option key={m} value={m}>{m}</option>)}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={ollamaModel}
+                                                    onChange={(e) => setOllamaModel(e.target.value)}
+                                                    onBlur={() => { if (llmStatus?.provider === "ollama") switchProvider("ollama"); }}
+                                                    className="w-full bg-black/60 border border-gray-800 rounded px-2 py-1.5 text-[10px] font-mono text-cyan-300 outline-none focus:border-cyan-500/50"
+                                                    placeholder="llama3"
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!llmStatus && (
+                                    <p className="text-[9px] text-gray-600 font-mono">OSINT agent offline — LLM settings unavailable</p>
+                                )}
                             </div>
                         </div>
 

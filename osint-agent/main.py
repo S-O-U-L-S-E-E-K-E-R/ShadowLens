@@ -416,6 +416,78 @@ async def friday_extract(req: FridayAnalyzeRequest):
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
 
 
+# --- LLM Provider Settings ---
+
+@app.get("/llm/status")
+async def llm_status():
+    """Return current LLM provider config and availability."""
+    from config import get_llm_provider, get_ollama_config
+    try:
+        from syd.engine import get_engine
+        engine = get_engine()
+        claude_ok = engine._claude_path is not None
+        ollama_ok = engine._ollama_available
+    except Exception:
+        claude_ok = False
+        ollama_ok = False
+    return {
+        "provider": get_llm_provider(),
+        "claude_available": claude_ok,
+        "ollama_available": ollama_ok,
+        "ollama": get_ollama_config(),
+    }
+
+
+class LlmProviderUpdate(BaseModel):
+    provider: str  # "claude" or "ollama"
+    ollama_base_url: Optional[str] = None
+    ollama_model: Optional[str] = None
+
+
+@app.put("/llm/provider")
+async def set_llm_provider(req: LlmProviderUpdate):
+    """Switch LLM provider between claude and ollama."""
+    if req.provider not in ("claude", "ollama"):
+        return {"status": "error", "message": "Provider must be 'claude' or 'ollama'"}
+
+    os.environ["LLM_PROVIDER"] = req.provider
+    if req.ollama_base_url:
+        os.environ["OLLAMA_BASE_URL"] = req.ollama_base_url
+    if req.ollama_model:
+        os.environ["OLLAMA_MODEL"] = req.ollama_model
+
+    # Re-probe Ollama if switching to it
+    if req.provider == "ollama":
+        try:
+            from syd.engine import get_engine
+            engine = get_engine()
+            engine._probe_ollama()
+        except Exception:
+            pass
+
+    return {
+        "status": "ok",
+        "provider": req.provider,
+        "ollama_base_url": os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+        "ollama_model": os.environ.get("OLLAMA_MODEL", "llama3"),
+    }
+
+
+@app.get("/ollama/models")
+async def ollama_models():
+    """List available Ollama models."""
+    import urllib.request
+    ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    try:
+        req = urllib.request.Request(f"{ollama_url}/api/tags", headers={"User-Agent": "ShadowLens/1.0"})
+        resp = urllib.request.urlopen(req, timeout=5)
+        data = json.loads(resp.read())
+        models = [m.get("name", "") for m in data.get("models", [])]
+        return {"status": "ok", "models": models}
+    except Exception as e:
+        return {"status": "error", "models": [], "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
