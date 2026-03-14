@@ -46,7 +46,11 @@ OSINT_KEYWORDS = [
 LOCATE_KEYWORDS = [
     'plot ', 'plot on', 'locate ', 'map ', 'show on map', 'show me ',
     'where is ', 'find ', 'fly to ', 'go to ', 'zoom to ',
-    'on the map', 'location of',
+    'on the map', 'location of', 'place a marker', 'place marker',
+    'mark ', 'mark the', 'pin ', 'pin the', 'pinpoint',
+    'find the location', 'find location', 'put a pin', 'drop a pin',
+    'show location', 'mark location', 'marker at', 'marker on',
+    'mark on map', 'pin on map', 'find on map', 'find it on',
 ]
 
 # Pattern for US street addresses (e.g. "1087 Reynolds Bridge Rd, Benton TN 37042")
@@ -535,7 +539,10 @@ class FridayEngine:
             blocked += f"\nOriginal answer: {answer[:300]}..."
             answer = blocked
 
-        return {
+        # Extract any IP/location references from scan analysis
+        locations = self._extract_locations_from_answer(answer, question)
+
+        result = {
             'answer': answer,
             'mode': 'scan_analysis',
             'validated': validation['valid'],
@@ -543,6 +550,9 @@ class FridayEngine:
             'facts_summary': facts_text[:500],
             'module': module,
         }
+        if locations:
+            result['locations'] = locations
+        return result
 
     def _handle_entity_query(self, question: str, context: str, entity_type: str, history: list = None) -> dict:
         """Analyze any entity type — flights, ships, bases, threats, weather, etc."""
@@ -578,18 +588,47 @@ class FridayEngine:
             "- For cyber threats: TTPs, attribution indicators, IOCs, mitigation\n"
             "- Only reference live news/social/GDELT feeds from active_data if they're directly relevant to this entity\n"
             "- Provide intelligence-grade analysis: what is it, why it matters, what to watch\n"
-            "- Be concise but thorough. Do NOT pad with generic recommendations.\n\n"
-            f"{self._format_history(history)}"
+            "- Be concise but thorough. Do NOT pad with generic recommendations.\n"
+        )
+
+        # If user wants a location plotted, hint the LLM to output LOCATION: tags
+        if self._needs_locate(question):
+            prompt += (
+                "\nIMPORTANT: If your answer references a specific geographic location, "
+                "include a line in this exact format:\nLOCATION: <place name or address>\n"
+                "This allows the platform to plot it on the map.\n"
+            )
+
+        prompt += (
+            f"\n{self._format_history(history)}"
             f"---\n\nCurrent question: {question}"
         )
         answer = self._call_llm(prompt)
-        return {
+
+        # Extract any locations from the answer + entity context for map plotting
+        locations = self._extract_locations_from_answer(answer, question)
+        # Also try to get coordinates from the entity data itself
+        if not locations:
+            try:
+                ctx = json.loads(context)
+                lat = ctx.get('lat') or ctx.get('latitude')
+                lon = ctx.get('lon') or ctx.get('lng') or ctx.get('longitude')
+                if lat is not None and lon is not None:
+                    name = ctx.get('name') or ctx.get('callsign') or ctx.get('id') or entity_type
+                    locations.append({"lat": float(lat), "lon": float(lon), "label": str(name), "source": "entity"})
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+
+        result = {
             'answer': answer,
             'mode': 'entity_analysis',
             'validated': True,
             'issues': [],
             'facts_summary': f"Entity type: {entity_type}",
         }
+        if locations:
+            result['locations'] = locations
+        return result
 
     def _geocode_location(self, location_text: str) -> dict | None:
         """Geocode a place name / address using OpenStreetMap Nominatim. Returns {lat, lon, label, source} or None."""
@@ -660,23 +699,73 @@ class FridayEngine:
             if loc:
                 locations.append(loc)
 
-        # Extract explicit coordinates (lat, lon patterns)
+        # Extract explicit coordinates — multiple formats:
+        # "lat: 25.75, lon: 55.25" / "latitude: 25.75, longitude: 55.25"
         coord_pattern = re.compile(r'(?:lat(?:itude)?)[:\s]+(-?\d+\.?\d*)[,\s]+(?:lon(?:gitude)?|lng)[:\s]+(-?\d+\.?\d*)', re.IGNORECASE)
         for m in coord_pattern.finditer(answer):
             lat, lon = float(m.group(1)), float(m.group(2))
             if -90 <= lat <= 90 and -180 <= lon <= 180:
                 locations.append({"lat": lat, "lon": lon, "label": f"Coordinates ({lat:.4f}, {lon:.4f})", "source": "extracted"})
 
+        # "25.75°N, 55.25°E" / "25.75° N, 55.25° E" / "25.75N 55.25E"
+        deg_pattern = re.compile(r'(-?\d+\.?\d*)\s*°?\s*([NSns])\s*[,\s]+\s*(-?\d+\.?\d*)\s*°?\s*([EWew])')
+        for m in deg_pattern.finditer(answer):
+            lat = float(m.group(1)) * (-1 if m.group(2).upper() == 'S' else 1)
+            lon = float(m.group(3)) * (-1 if m.group(4).upper() == 'W' else 1)
+            if -90 <= lat <= 90 and -180 <= lon <= 180:
+                key = f"{lat:.4f},{lon:.4f}"
+                if key not in seen:
+                    seen.add(key)
+                    locations.append({"lat": lat, "lon": lon, "label": f"Coordinates ({lat:.4f}, {lon:.4f})", "source": "extracted"})
+
+        # Bare coordinate pairs: (25.75, 55.25) or 25.75, 55.25
+        bare_coord = re.compile(r'(?<!\d)(-?\d{1,3}\.\d{2,6})\s*[,\s]\s*(-?\d{1,3}\.\d{2,6})(?!\d)')
+        for m in bare_coord.finditer(answer):
+            lat, lon = float(m.group(1)), float(m.group(2))
+            if -90 <= lat <= 90 and -180 <= lon <= 180 and not (lat == 0 and lon == 0):
+                key = f"{lat:.4f},{lon:.4f}"
+                if key not in seen:
+                    seen.add(key)
+                    locations.append({"lat": lat, "lon": lon, "label": f"Coordinates ({lat:.4f}, {lon:.4f})", "source": "extracted"})
+
         # Extract LOCATION: tags (structured output from the prompt)
         loc_pattern = re.compile(r'LOCATION:\s*(.+?)(?:\n|$)', re.IGNORECASE)
         geocoded_texts = set()
         for m in loc_pattern.finditer(answer):
-            loc_text = m.group(1).strip().rstrip('.')
-            if loc_text and loc_text not in geocoded_texts and len(loc_text) > 3:
-                geocoded_texts.add(loc_text)
-                loc = self._geocode_location(loc_text)
-                if loc:
-                    locations.append(loc)
+            raw_loc = m.group(1).strip().rstrip('.').strip('*').strip()
+
+            # First: try to extract coordinates directly from the LOCATION line
+            # Handles: "Persian Gulf, 25.811, 54.833" or "Kharg Island (26.2, 50.3)"
+            loc_has_coords = False
+            for cp in [deg_pattern, bare_coord]:
+                for cm in cp.finditer(raw_loc):
+                    if cp == deg_pattern:
+                        clat = float(cm.group(1)) * (-1 if cm.group(2).upper() == 'S' else 1)
+                        clon = float(cm.group(3)) * (-1 if cm.group(4).upper() == 'W' else 1)
+                    else:
+                        clat, clon = float(cm.group(1)), float(cm.group(2))
+                    if -90 <= clat <= 90 and -180 <= clon <= 180 and not (clat == 0 and clon == 0):
+                        key = f"{clat:.4f},{clon:.4f}"
+                        if key not in seen:
+                            seen.add(key)
+                            # Use the place name part as the label
+                            label = re.sub(r'[\d.,°NSEW\s]+$', '', raw_loc).strip(' ,') or f"({clat:.4f}, {clon:.4f})"
+                            locations.append({"lat": clat, "lon": clon, "label": label, "source": "extracted"})
+                            loc_has_coords = True
+
+            # If no coords found in the LOCATION line, clean it up and geocode the place name
+            if not loc_has_coords:
+                loc_text = raw_loc
+                loc_text = re.sub(r'\(.*?\)', '', loc_text).strip()
+                loc_text = re.sub(r'approximately\s*', '', loc_text, flags=re.IGNORECASE).strip()
+                loc_text = re.sub(r'\d+\.?\d*°?\s*[NSEW],?\s*\d+\.?\d*°?\s*[NSEW]', '', loc_text).strip()
+                loc_text = re.sub(r'-?\d+\.?\d*\s*,\s*-?\d+\.?\d*', '', loc_text).strip()  # remove bare coords
+                loc_text = loc_text.strip(' ,')
+                if loc_text and loc_text not in geocoded_texts and len(loc_text) > 3:
+                    geocoded_texts.add(loc_text)
+                    loc = self._geocode_location(loc_text)
+                    if loc:
+                        locations.append(loc)
 
         # If no locations found yet, try to extract US city/state patterns from the text
         if not locations:
@@ -847,6 +936,16 @@ class FridayEngine:
                 "reference them directly when answering questions about current events or what's happening.\n\n"
                 f"LIVE PLATFORM DATA:\n```json\n{context}\n```\n\n"
             )
+
+        # If the question mentions a location/place, instruct the LLM to output a LOCATION: tag
+        location_hint = ""
+        if self._needs_locate(question):
+            location_hint = (
+                "\n\nIMPORTANT: If your answer references a specific geographic location, "
+                "include a line in this exact format:\nLOCATION: <place name or address>\n"
+                "This allows the platform to plot it on the map.\n"
+            )
+
         prompt = (
             "You are F.R.I.D.A.Y., an advanced AI assistant embedded in ShadowLens — "
             "a real-time global intelligence and cybersecurity platform.\n\n"
@@ -856,17 +955,25 @@ class FridayEngine:
             f"{context_block}"
             "Answer the user's question directly and concisely. Use your full knowledge "
             "and reference any live data provided above when relevant.\n\n"
+            f"{location_hint}"
             f"{self._format_history(history)}"
             f"---\n\nCurrent question: {question}"
         )
         answer = self._call_llm(prompt)
-        return {
+
+        # Extract locations from the answer for map plotting
+        locations = self._extract_locations_from_answer(answer, question)
+
+        result = {
             'answer': answer,
             'mode': 'general',
             'validated': True,
             'issues': [],
             'facts_summary': '',
         }
+        if locations:
+            result['locations'] = locations
+        return result
 
     def query(self, question: str, scan_data: str, module: str = "nmap") -> dict:
         """Legacy compatibility — routes through chat()."""
