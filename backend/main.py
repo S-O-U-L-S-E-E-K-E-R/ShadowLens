@@ -910,21 +910,31 @@ Provide a brief but thorough intelligence assessment including:
     if llm_provider == "ollama" or (llm_provider == "claude" and not api_key):
         try:
             import urllib.request
+            system_msg = (
+                "You are a senior intelligence analyst. "
+                "CRITICAL: ONLY use data explicitly provided. NEVER invent or guess values. "
+                "Quote exact callsigns, registrations, coordinates, speeds, and altitudes from the data. "
+                "If a field is missing, say 'not available'. Keep analysis concise."
+            )
             payload = json_mod.dumps({
                 "model": ollama_model,
-                "prompt": prompt,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
                 "stream": False,
-                "options": {"num_predict": 1024},
+                "options": {"num_predict": 1024, "temperature": 0.3},
             }).encode()
             req = urllib.request.Request(
-                f"{ollama_url}/api/generate",
+                f"{ollama_url}/api/chat",
                 data=payload,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
             resp = urllib.request.urlopen(req, timeout=60)
             data = json_mod.loads(resp.read())
-            text = data.get("response", "").strip()
+            msg = data.get("message", {})
+            text = msg.get("content", "").strip() if isinstance(msg, dict) else ""
             if text:
                 return {"analysis": text, "source": f"ollama/{ollama_model}", "entity": entity_data}
         except Exception as e:

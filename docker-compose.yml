@@ -11,10 +11,10 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       - AIS_API_KEY=${AIS_API_KEY}
-      - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID:-shadowbroker-api-client}
-      - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET}
+      - OPENSKY_CLIENT_ID=shadowbroker-api-client
+      - OPENSKY_CLIENT_SECRET=qtAF9Y8teWGt8SG013NNWmukrehKsjaF
       - LTA_ACCOUNT_KEY=${LTA_ACCOUNT_KEY}
-      - OPENCELLID_API_KEY=${OPENCELLID_API_KEY:-pk.1b0e5e66ae9a474feb0f522b6ac260c4}
+      - OPENCELLID_API_KEY=pk.1b0e5e66ae9a474feb0f522b6ac260c4
       - OSINT_AGENT_URL=http://host.docker.internal:8002
     volumes:
       - backend_data:/app/data

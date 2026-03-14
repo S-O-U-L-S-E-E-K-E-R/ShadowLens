@@ -314,26 +314,45 @@ class FridayEngine:
             return f"[F.R.I.D.A.Y. Error] Failed to reach Claude: {e}"
 
     def _call_ollama(self, prompt: str, timeout: int = 120) -> str:
-        """Call Ollama API and return the response."""
+        """Call Ollama chat API and return the response.
+
+        Uses /api/chat with a strict system prompt to reduce hallucination.
+        The user prompt is expected to contain all entity data inline.
+        """
         import urllib.request
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         model = os.environ.get("OLLAMA_MODEL", "llama3")
+
+        system_msg = (
+            "You are F.R.I.D.A.Y., an intelligence analysis AI. "
+            "CRITICAL RULES:\n"
+            "1. ONLY use data explicitly provided in the user message. NEVER invent, guess, or hallucinate any values.\n"
+            "2. If a field is not in the provided data, say 'not available' — do NOT make up a value.\n"
+            "3. Quote exact values from the data (callsigns, registrations, coordinates, speeds, altitudes).\n"
+            "4. If the data says the aircraft is a Boeing 767, do NOT say it is an Airbus. Use EXACT data.\n"
+            "5. Keep your analysis concise and grounded in the provided facts."
+        )
+
         try:
             payload = json.dumps({
                 "model": model,
-                "prompt": prompt,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
                 "stream": False,
-                "options": {"num_predict": 2048},
+                "options": {"num_predict": 2048, "temperature": 0.3},
             }).encode()
             req = urllib.request.Request(
-                f"{ollama_url}/api/generate",
+                f"{ollama_url}/api/chat",
                 data=payload,
                 headers={"Content-Type": "application/json", "User-Agent": "ShadowLens/1.0"},
                 method="POST",
             )
             resp = urllib.request.urlopen(req, timeout=timeout)
             data = json.loads(resp.read())
-            return data.get("response", "").strip()
+            msg = data.get("message", {})
+            return msg.get("content", "").strip() if isinstance(msg, dict) else ""
         except Exception as e:
             logger.error(f"F.R.I.D.A.Y.: Ollama error: {e}")
             return f"[F.R.I.D.A.Y. Error] Ollama request failed: {e}"

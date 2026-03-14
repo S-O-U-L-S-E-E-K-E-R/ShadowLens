@@ -101,7 +101,7 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Check core prerequisites
 # ---------------------------------------------------------------------------
-echo "[1/5] Checking prerequisites..."
+echo "[1/6] Checking prerequisites..."
 
 if ! has docker; then
     fail "Docker not found. Install from https://docs.docker.com/engine/install/"
@@ -127,11 +127,25 @@ else
     ok "Go found ($(go version | awk '{print $3}'))"
 fi
 
+if has claude; then
+    ok "Claude Code CLI found ($(claude --version 2>/dev/null | head -1))"
+else
+    warn "Claude Code CLI not found — F.R.I.D.A.Y. will need Ollama as LLM backend"
+    warn "Install from: https://docs.anthropic.com/en/docs/claude-code"
+fi
+
+if has ollama; then
+    ok "Ollama found"
+else
+    warn "Ollama not found — install for local LLM support (optional)"
+    warn "Install: curl -fsSL https://ollama.com/install.sh | sh"
+fi
+
 # ---------------------------------------------------------------------------
 # 2. Create .env if missing
 # ---------------------------------------------------------------------------
 echo ""
-echo "[2/5] Environment setup..."
+echo "[2/6] Environment setup..."
 
 if [ ! -f "$SCRIPT_DIR/.env" ]; then
     cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
@@ -145,7 +159,7 @@ fi
 # 3. Set up OSINT agent Python venv
 # ---------------------------------------------------------------------------
 echo ""
-echo "[3/5] OSINT agent Python environment..."
+echo "[3/6] OSINT agent Python environment..."
 
 VENV_DIR="$SCRIPT_DIR/osint-agent/venv"
 VENV_PIP="$VENV_DIR/bin/pip"
@@ -168,7 +182,7 @@ ok "Python requirements installed"
 # 4. Install OSINT tools
 # ---------------------------------------------------------------------------
 echo ""
-echo "[4/5] Installing OSINT tools..."
+echo "[4/6] Installing OSINT tools..."
 echo ""
 
 # Update apt cache once
@@ -230,10 +244,37 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Build Docker images
+# 5. Ollama (optional local LLM)
 # ---------------------------------------------------------------------------
 echo ""
-echo "[5/5] Building Docker images..."
+echo "[5/6] Ollama (local LLM backend)..."
+
+if has ollama; then
+    ok "Ollama already installed"
+    # Pull default model if none exist
+    MODEL_COUNT=$(ollama list 2>/dev/null | tail -n +2 | wc -l)
+    if [ "$MODEL_COUNT" -eq 0 ]; then
+        info "No Ollama models found. Pulling llama3 (4.7 GB)..."
+        if ollama pull llama3 &>/dev/null; then
+            ok "llama3 model pulled"
+        else
+            warn "Failed to pull llama3 — pull manually: ollama pull llama3"
+        fi
+    else
+        ok "Ollama has $MODEL_COUNT model(s) available"
+    fi
+else
+    info "Ollama not installed. Install for local LLM support (optional):"
+    echo "    curl -fsSL https://ollama.com/install.sh | sh"
+    echo "    ollama pull llama3"
+    ((SKIPPED++))
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Build Docker images
+# ---------------------------------------------------------------------------
+echo ""
+echo "[6/6] Building Docker images..."
 
 cd "$SCRIPT_DIR"
 if sudo docker compose build --quiet 2>/dev/null; then
@@ -275,4 +316,17 @@ for tool in theHarvester sherlock h8mail maigret holehe autorecon shodan spiderf
         echo -e "    ${RED}-${NC} $tool (not found)"
     fi
 done
+echo ""
+echo "  LLM backends:"
+if has claude; then
+    echo -e "    ${GREEN}+${NC} Claude Code CLI"
+else
+    echo -e "    ${RED}-${NC} Claude Code CLI (not found)"
+fi
+if has ollama; then
+    MODEL_COUNT=$(ollama list 2>/dev/null | tail -n +2 | wc -l)
+    echo -e "    ${GREEN}+${NC} Ollama ($MODEL_COUNT model(s))"
+else
+    echo -e "    ${RED}-${NC} Ollama (not installed)"
+fi
 echo ""
