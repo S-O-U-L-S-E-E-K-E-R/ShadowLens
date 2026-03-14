@@ -53,6 +53,16 @@ LOCATE_KEYWORDS = [
     'mark on map', 'pin on map', 'find on map', 'find it on',
 ]
 
+# Camera/webcam discovery keywords — triggers nearby webcam search
+CAMERA_KEYWORDS = [
+    'find camera', 'find cctv', 'find webcam', 'camera feed', 'cctv feed',
+    'webcam feed', 'show camera', 'show cctv', 'show webcam', 'camera at',
+    'cameras near', 'cameras in', 'cctv near', 'webcam near', 'webcams near',
+    'webcams in', 'live cam', 'live camera', 'surveillance camera',
+    'pull up camera', 'pull up cctv', 'get camera', 'get cctv',
+    'camera footage', 'video feed', 'find feed', 'find stream',
+]
+
 # Pattern for US street addresses (e.g. "1087 Reynolds Bridge Rd, Benton TN 37042")
 ADDRESS_PATTERN = re.compile(
     r'\b\d+\s+[\w\s]+(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place|cir|circle|hwy|highway|pkwy|parkway)\b',
@@ -394,6 +404,58 @@ class FridayEngine:
             return True
         return False
 
+    def _needs_camera(self, question: str) -> bool:
+        """Detect if the question is a camera/webcam discovery request."""
+        q = question.lower()
+        return any(kw in q for kw in CAMERA_KEYWORDS)
+
+    def _search_webcams(self, lat: float, lon: float, radius_km: int = 50, limit: int = 10) -> list:
+        """Search for webcams near coordinates using Windy Webcams API v3."""
+        import urllib.request
+        api_key = os.environ.get("WINDY_WEBCAMS_API_KEY", "")
+        if not api_key:
+            return []
+        try:
+            url = (
+                f"https://api.windy.com/webcams/api/v3/webcams"
+                f"?nearby={lat},{lon},{radius_km}"
+                f"&include=images,location,player,urls"
+                f"&limit={limit}&lang=en"
+            )
+            req = urllib.request.Request(url, headers={
+                "X-WINDY-API-KEY": api_key,
+                "User-Agent": "ShadowLens/1.0",
+            })
+            resp = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(resp.read())
+            webcams = data.get("webcams", [])
+            results = []
+            for cam in webcams:
+                loc = cam.get("location", {})
+                player = cam.get("player", {})
+                images = cam.get("images", {})
+                current_img = images.get("current", {})
+                embed_url = player.get("day", "")
+                thumbnail = current_img.get("icon", "") or current_img.get("small", "")
+                results.append({
+                    "lat": loc.get("latitude"),
+                    "lon": loc.get("longitude"),
+                    "label": cam.get("title", "Webcam"),
+                    "source": "windy_webcam",
+                    "webcam_id": cam.get("webcamId"),
+                    "city": loc.get("city", ""),
+                    "country": loc.get("country", ""),
+                    "embed_url": embed_url,
+                    "thumbnail": thumbnail,
+                    "media_url": embed_url,
+                    "media_type": "embed",
+                    "status": cam.get("status", ""),
+                })
+            return results
+        except Exception as e:
+            logger.warning(f"Windy webcam search failed: {e}")
+            return []
+
     def _detect_entity_type(self, context_data: str) -> Optional[str]:
         """Parse context JSON and return the entity type, or None."""
         try:
@@ -490,7 +552,12 @@ class FridayEngine:
         entity_type = self._detect_entity_type(context)
         needs_osint = self._needs_osint(question)
         needs_locate = self._needs_locate(question)
+        needs_camera = self._needs_camera(question)
         hist = history or []
+
+        # Route 0: Camera/webcam discovery — find live feeds near a location
+        if needs_camera:
+            return self._handle_camera_query(question, context, hist)
 
         # Route 1: OSINT request — enable tools (highest priority, user is asking for action)
         if needs_osint:
@@ -781,6 +848,132 @@ class FridayEngine:
                         break
 
         return locations[:20]  # Cap at 20 to avoid huge payloads
+
+    def _handle_camera_query(self, question: str, context: str, history: list = None) -> dict:
+        """Handle camera/webcam discovery — find live feeds near a location."""
+        # Parse requested count from the question (e.g. "find 5 cameras", "show me 10 webcams")
+        count_match = re.search(r'\b(\d+)\s*(?:camera|webcam|cctv|feed|stream)', question.lower())
+        if not count_match:
+            count_match = re.search(r'(?:find|show|get|pull up)\s+(\d+)', question.lower())
+        requested_limit = int(count_match.group(1)) if count_match else 50  # default: return all available up to 50
+
+        # Extract location from the question by stripping camera-related words
+        location_text = question.lower()
+        # Sort keywords longest-first so longer phrases match before substrings
+        sorted_kws = sorted(CAMERA_KEYWORDS, key=len, reverse=True)
+        for kw in sorted_kws:
+            location_text = location_text.replace(kw, ' ')
+        # Strip all noise words that aren't part of place names
+        noise = {'find', 'show', 'get', 'pull', 'up', 'me', 'feeds', 'feed', 'streams',
+                 'stream', 'footage', 'cameras', 'camera', 'cctv', 'webcam', 'webcams',
+                 'live', 'video', 'at', 'in', 'near', 'around', 'for', 'the', 'a', 'an',
+                 'some', 'any', 'from', 'to', 'on', 'with'}
+        words = location_text.split()
+        # Remove noise words and standalone numbers/single chars
+        cleaned = [w for w in words if w not in noise and not re.match(r'^(\d+|[a-z])$', w)]
+        # Keep "of" only if it connects place name parts (e.g. "Strait of Hormuz")
+        # Re-insert "of" between non-noise words
+        final_words = []
+        for i, w in enumerate(words):
+            if w == 'of' and final_words and i + 1 < len(words) and words[i + 1] not in noise:
+                final_words.append(w)
+            elif w in cleaned:
+                final_words.append(w)
+        location_text = ' '.join(final_words).strip()
+        location_text = re.sub(r'\s+', ' ', location_text).strip()
+
+        # Try to get coords from entity context first
+        lat, lon = None, None
+        try:
+            ctx = json.loads(context) if context else {}
+            lat = ctx.get('lat') or ctx.get('latitude')
+            lon = ctx.get('lon') or ctx.get('lng') or ctx.get('longitude')
+            if lat and lon:
+                lat, lon = float(lat), float(lon)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+
+        # If no coords from context, geocode the location text
+        if not lat or not lon:
+            if location_text:
+                geo = self._geocode_location(location_text)
+                if geo:
+                    lat, lon = geo['lat'], geo['lon']
+
+        if not lat or not lon:
+            return {
+                'answer': f"I couldn't determine the location for \"{location_text}\". Try specifying a city or address.",
+                'mode': 'camera_search',
+                'validated': True,
+                'issues': [],
+                'facts_summary': '',
+            }
+
+        # Search for webcams
+        webcams = self._search_webcams(lat, lon, radius_km=250, limit=min(requested_limit, 50))
+
+        # Also check existing CCTV feeds in the platform data
+        existing_note = ""
+        try:
+            from services.data_fetcher import get_latest_data
+            d = get_latest_data()
+            nearby_cctv = []
+            for c in d.get('cctv', []):
+                clat = c.get('lat') or c.get('latitude')
+                clng = c.get('lon') or c.get('lng')
+                if clat and clng:
+                    try:
+                        dist = abs(float(clat) - lat) + abs(float(clng) - lon)
+                        if dist < 1.0:  # roughly within ~100km
+                            nearby_cctv.append(c)
+                    except (ValueError, TypeError):
+                        pass
+            if nearby_cctv:
+                existing_note = f"\n\nNote: {len(nearby_cctv)} existing CCTV feeds from the platform database are also near this location (visible on the CCTV layer)."
+        except Exception:
+            pass
+
+        if webcams:
+            cam_list = "\n".join([
+                f"- **{c['label']}** ({c.get('city', '')}, {c.get('country', '')}) — [View feed]({c.get('embed_url', '')})"
+                for c in webcams
+            ])
+            answer = (
+                f"Found **{len(webcams)} live webcam(s)** near {location_text or f'{lat:.3f}, {lon:.3f}'}:\n\n"
+                f"{cam_list}\n\n"
+                f"Click any marker on the map to view the live feed."
+                f"{existing_note}"
+            )
+            # Return webcams as locations with media data for map pins
+            locations = []
+            for c in webcams:
+                locations.append({
+                    "lat": c["lat"],
+                    "lon": c["lon"],
+                    "label": c["label"],
+                    "source": "windy_webcam",
+                    "media_url": c.get("embed_url", ""),
+                    "media_type": "embed",
+                    "thumbnail": c.get("thumbnail", ""),
+                    "webcam_id": c.get("webcam_id"),
+                })
+        else:
+            answer = (
+                f"No public webcams found near {location_text or f'{lat:.3f}, {lon:.3f}'} "
+                f"within 250km. Try a larger city or a different area."
+                f"{existing_note}"
+            )
+            locations = [{"lat": lat, "lon": lon, "label": location_text or "Search area", "source": "geocode"}]
+
+        return {
+            'answer': answer,
+            'mode': 'camera_search',
+            'query': question,
+            'validated': True,
+            'issues': [],
+            'facts_summary': f"Webcams near {location_text}",
+            'locations': locations,
+        }
 
     def _handle_osint_query(self, question: str, context: str, history: list = None) -> dict:
         """Handle OSINT requests — Claude with tool access for active research."""

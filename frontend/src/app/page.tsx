@@ -634,6 +634,9 @@ export default function Dashboard() {
                       label: l.label || `Result ${i + 1}`,
                       source: l.source || 'osint',
                       id: `pin-${Date.now()}-${i}`,
+                      media_url: l.media_url || '',
+                      media_type: l.media_type || '',
+                      thumbnail: l.thumbnail || '',
                     }));
                     setPinnedLocations(prev => [...prev, ...newPins]);
                   }

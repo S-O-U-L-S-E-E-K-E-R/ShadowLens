@@ -303,6 +303,16 @@ API_REGISTRY = [
         "url": "https://www.misp-project.org/",
         "required": False,
     },
+    # ---- Webcams ----
+    {
+        "id": "windy_webcams_api_key",
+        "env_key": "WINDY_WEBCAMS_API_KEY",
+        "name": "Windy Webcams",
+        "description": "Windy Webcams API key for discovering live public webcams worldwide. Enables camera feed search in F.R.I.D.A.Y. Free tier available.",
+        "category": "Intelligence",
+        "url": "https://api.windy.com/keys",
+        "required": False,
+    },
     # ---- Local Tools ----
     {
         "id": "kismet_api_key",
@@ -355,6 +365,7 @@ _OSINT_KEYS = {
     "DEHASHED_API_KEY", "DEHASHED_EMAIL", "LEAK_LOOKUP_API_KEY", "EMAILREP_API_KEY",
     "OTX_API_KEY", "MISP_API_KEY", "MISP_URL", "KISMET_API_KEY",
     "HACKERONE_API_TOKEN",
+    "WINDY_WEBCAMS_API_KEY",
 }
 
 

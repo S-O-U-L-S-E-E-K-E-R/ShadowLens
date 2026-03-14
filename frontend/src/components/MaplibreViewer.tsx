@@ -4144,31 +4144,46 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
                 )}
 
                 {/* PINNED LOCATIONS — from F.R.I.D.A.Y. OSINT/locate results */}
-                {pinnedLocations && pinnedLocations.length > 0 && pinnedLocations.map((pin: any, idx: number) => (
+                {pinnedLocations && pinnedLocations.length > 0 && pinnedLocations.map((pin: any, idx: number) => {
+                    const isWebcam = pin.source === 'windy_webcam' && pin.media_url;
+                    const pinColor = isWebcam ? '#06b6d4' : '#ef4444';
+                    const pinBorder = isWebcam ? '#67e8f9' : '#fca5a5';
+                    const borderClass = isWebcam ? 'border-cyan-500' : 'border-red-500';
+                    const labelBorder = isWebcam ? 'border-cyan-800/60' : 'border-red-800/60';
+                    const labelText = isWebcam ? 'text-cyan-400' : 'text-red-400';
+                    return (
                     <Marker key={pin.id || `pin-${idx}`} longitude={pin.lng} latitude={pin.lat} anchor="bottom" style={{ zIndex: 9 }}>
-                        <div className="flex flex-col items-center cursor-pointer group relative">
+                        <div className="flex flex-col items-center cursor-pointer group relative" onClick={(e) => {
+                            e.stopPropagation();
+                            if (isWebcam) {
+                                onEntityClick?.({ type: 'cctv', id: pin.id, name: pin.label, media_url: pin.media_url, extra: { media_type: 'embed', media_url: pin.media_url, label: pin.label, source: 'windy_webcam', source_agency: 'Windy Webcams', thumbnail: pin.thumbnail } });
+                            } else {
+                                onEntityClick?.({ type: 'pinned_location', id: pin.id, extra: pin });
+                            }
+                        }}>
                             {/* Pulse ring */}
-                            <div className="w-6 h-6 rounded-full border-2 border-red-500 animate-ping absolute opacity-25" />
+                            <div className={`w-6 h-6 rounded-full border-2 ${borderClass} animate-ping absolute opacity-25 pointer-events-none`} />
                             {/* Pin icon */}
-                            <svg width="20" height="28" viewBox="0 0 20 28" className="drop-shadow-[0_0_8px_rgba(239,68,68,0.7)]" onClick={() => onEntityClick?.({ type: 'pinned_location', id: pin.id, extra: pin })}>
-                                <path d="M10 0C4.5 0 0 4.5 0 10c0 7.5 10 18 10 18s10-10.5 10-18C20 4.5 15.5 0 10 0z" fill="#ef4444" stroke="#fca5a5" strokeWidth="1"/>
-                                <circle cx="10" cy="10" r="4" fill="#fca5a5"/>
+                            <svg width="20" height="28" viewBox="0 0 20 28" className={`drop-shadow-[0_0_8px_rgba(${isWebcam ? '6,182,212' : '239,68,68'},0.7)]`}>
+                                <path d="M10 0C4.5 0 0 4.5 0 10c0 7.5 10 18 10 18s10-10.5 10-18C20 4.5 15.5 0 10 0z" fill={pinColor} stroke={pinBorder} strokeWidth="1"/>
+                                <circle cx="10" cy="10" r="4" fill={pinBorder}/>
                             </svg>
                             {/* Remove button — appears on hover */}
                             <div
-                                className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-black border border-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 z-10"
+                                className={`absolute -top-2 -right-2 w-4 h-4 rounded-full bg-black border ${borderClass} flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900 z-10`}
                                 title="Remove pin"
                                 onClick={(e) => { e.stopPropagation(); onRemovePin?.(pin.id); }}
                             >
-                                <span className="text-red-400 text-[8px] font-bold leading-none">✕</span>
+                                <span className={`${labelText} text-[8px] font-bold leading-none`}>✕</span>
                             </div>
                             {/* Label */}
-                            <div className="mt-1 bg-black/85 border border-red-800/60 rounded px-1.5 py-0.5 text-[8px] font-mono text-red-400 tracking-wider whitespace-nowrap max-w-[180px] truncate shadow-[0_0_10px_rgba(239,68,68,0.3)]">
-                                {pin.label || `Pin ${idx + 1}`}
+                            <div className={`mt-1 bg-black/85 border ${labelBorder} rounded px-1.5 py-0.5 text-[8px] font-mono ${labelText} tracking-wider whitespace-nowrap max-w-[180px] truncate shadow-[0_0_10px_rgba(${isWebcam ? '6,182,212' : '239,68,68'},0.3)]`}>
+                                {isWebcam ? '📷 ' : ''}{pin.label || `Pin ${idx + 1}`}
                             </div>
                         </div>
                     </Marker>
-                ))}
+                    );
+                })}
 
                 {/* Clear pins button (top-right of map when pins exist) */}
                 {pinnedLocations && pinnedLocations.length > 0 && (
