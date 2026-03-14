@@ -61,33 +61,29 @@ nano .env
 ```
 
 `setup.sh` handles the full first-time install:
-1. Creates `.env` from template
-2. Sets up OSINT agent Python venv and dependencies
-3. Installs OSINT tools via apt/pip/go (nmap, nuclei, whatweb, sherlock, etc.)
-4. Builds Docker images
+1. Checks prerequisites (Docker, Python, Go, Claude Code CLI, Ollama)
+2. Creates `.env` from template
+3. Sets up OSINT agent Python venv and dependencies
+4. Installs OSINT tools via apt/pip/go (nmap, nuclei, whatweb, sherlock, etc.)
+5. Installs Ollama + pulls default model (optional)
+6. Builds Docker images
 
 `start.sh` launches everything:
 1. Starts Docker containers (frontend on port 3000, backend on port 8001)
-2. Starts the OSINT agent on port 8002
-3. Waits for F.R.I.D.A.Y. engine to initialize
+2. Starts Ollama if installed (systemd or manual serve)
+3. Starts the OSINT agent on port 8002
+4. Waits for F.R.I.D.A.Y. engine to initialize and shows active LLM backend
 
 Open `http://localhost:3000` to view the dashboard.
 
 ### Windows
 
 ```bash
-# From the project root
-cd frontend
-npm install
-cd ../backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-cd ../frontend
-npm run dev
+# From the project root (requires Docker Desktop running)
+start.bat
 ```
 
-`npm run dev` starts both the Next.js frontend (port 3000) and the FastAPI backend concurrently. Docker must be running separately if using containers.
+`start.bat` starts Docker containers (frontend + backend), creates the OSINT agent venv if needed, and launches the OSINT agent on port 8002.
 
 ### After a Reboot
 
@@ -290,7 +286,7 @@ The backend runs inside Docker and reaches the OSINT agent on the host via `host
 ShadowLens/
 |-- setup.sh                        # First-time setup (installs all tools + builds Docker)
 |-- start.sh                        # One-command startup (Docker + OSINT Agent + F.R.I.D.A.Y.)
-|-- start.bat                       # Windows startup (dev mode)
+|-- start.bat                       # Windows startup (Docker + OSINT Agent)
 |-- docker-compose.yml              # Frontend + Backend containers
 |-- .env.example                    # Template for all environment variables
 |
@@ -369,6 +365,7 @@ TDOT_SMARTWAY_API_KEY=          # Tennessee DOT cameras
 LLM_PROVIDER=claude             # "claude" or "ollama"
 OLLAMA_BASE_URL=http://localhost:11434  # Ollama API endpoint
 OLLAMA_MODEL=llama3             # Ollama model name
+ANTHROPIC_API_KEY=              # For /api/analyze track analysis (optional)
 
 # OSINT Tools (all optional, enable as needed)
 SHODAN_API_KEY=                 # Internet-wide scanner
