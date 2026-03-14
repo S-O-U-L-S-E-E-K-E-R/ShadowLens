@@ -3581,7 +3581,7 @@ def fetch_internet_outages():
                         "message_type": "alert",
                         "limit": 30,
                     },
-                    headers={"User-Agent": "ShadowLens/1.0", "Accept": "application/geo+json"},
+                    headers={"User-Agent": "(ShadowLens, contact@shadowlens.app)", "Accept": "application/geo+json"},
                     timeout=15,
                 )
                 if resp4.status_code == 200:

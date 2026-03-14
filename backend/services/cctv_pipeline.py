@@ -179,7 +179,7 @@ class NYCDOTIngestor(BaseCCTVIngestor):
 class TDOTSmartWayIngestor(BaseCCTVIngestor):
     """Tennessee DOT SmartWay — 666 cameras statewide (Nashville, Knoxville, Memphis, Chattanooga)."""
     API_URL = "https://www.tdot.tn.gov/opendata/api/public/RoadwayCameras"
-    API_KEY = os.environ.get("TDOT_SMARTWAY_API_KEY", "")
+    API_KEY = os.environ.get("TDOT_SMARTWAY_API_KEY", "8d3b7a82635d476795c09b2c41facc60")
 
     def fetch_data(self) -> List[Dict[str, Any]]:
         response = fetch_with_curl(self.API_URL, timeout=15, headers={"ApiKey": self.API_KEY})
