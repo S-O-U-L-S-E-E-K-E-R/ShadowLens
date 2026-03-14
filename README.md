@@ -13,12 +13,15 @@ Built with **Next.js 16**, **MapLibre GL**, **FastAPI**, and **Python**.
 
 ### F.R.I.D.A.Y. — AI Analysis Engine
 
-ShadowLens includes **F.R.I.D.A.Y.**, an LLM-powered analysis engine that can analyze any entity on the map. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
+ShadowLens includes **F.R.I.D.A.Y.**, an AI analysis engine powered by **Claude Code CLI**. Select a flight, ship, military base, network host, or any other entity and F.R.I.D.A.Y. provides:
 
 * **Instant fact extraction** — Deterministic parsing of entity data (no AI, instant)
-* **Deep LLM analysis** — RAG pipeline with FAISS indexes for vulnerability assessment, risk analysis, and recommendations
+* **Deep LLM analysis** — Claude-powered RAG pipeline with FAISS indexes for vulnerability assessment, risk analysis, and recommendations
 * **Anti-hallucination validation** — 3-stage pipeline ensures answers are grounded in actual data
 * **Specialized modules** — Nmap scan parser, BloodHound AD attack path analysis, Volatility memory forensics
+* **Tool access** — F.R.I.D.A.Y. can run OSINT tools directly when answering research questions
+
+Requires [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated on the host.
 
 ### OSINT Agent — 18+ Security Tools
 
@@ -90,8 +93,8 @@ cd /path/to/ShadowLens
 * **Docker** and **docker compose** (for containerized deployment)
 * **Python 3.10+** with venv (for OSINT agent)
 * **Node.js 18+** and **npm** (for development mode only)
+* **[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)** (required for F.R.I.D.A.Y. AI analysis — must be installed and authenticated on the host)
 * **Go** (optional — for installing nuclei, subfinder, phoneinfoga)
-* **NVIDIA GPU** (optional — accelerates F.R.I.D.A.Y. inference, falls back to CPU)
 
 The `setup.sh` script auto-installs these OSINT tools:
 
