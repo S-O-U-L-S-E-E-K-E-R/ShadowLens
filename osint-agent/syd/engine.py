@@ -527,32 +527,39 @@ class FridayEngine:
 
     def _handle_entity_query(self, question: str, context: str, entity_type: str, history: list = None) -> dict:
         """Analyze any entity type — flights, ships, bases, threats, weather, etc."""
+        # Extract entity identity from context for focused analysis
+        entity_name = ""
+        try:
+            ctx_data = json.loads(context)
+            entity_name = ctx_data.get('name') or ctx_data.get('callsign') or ctx_data.get('id') or ''
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
         prompt = (
             "You are F.R.I.D.A.Y., an advanced intelligence analysis AI embedded in ShadowLens — "
             "a real-time global situational awareness platform.\n\n"
             "You have deep expertise in: OSINT, SIGINT, GEOINT, cybersecurity, aviation (ADS-B), "
             "maritime (AIS), military intelligence, threat analysis, and geopolitical assessment.\n\n"
-            "IMPORTANT: The data below is LIVE, REAL-TIME data from the platform's active feeds. "
-            "This includes live news, social media posts, flight tracking, ship tracking, GDELT events, "
-            "and other intelligence feeds that are being collected RIGHT NOW. "
-            "The 'active_data' field contains current data from all active layers the user can see. "
-            "Fields like 'live_news_feed', 'live_social_feed', 'gdelt_global_events' are LIVE feeds — "
-            "reference them directly when answering questions about current events, regional news, "
-            "or what's happening in a location. If regional_focus is set, the data is filtered to that region.\n\n"
-            "ENTITY & CONTEXT DATA FROM THE PLATFORM:\n"
+            f"THE USER HAS SELECTED A SPECIFIC ENTITY: {entity_name} (type: {entity_type})\n"
+            "YOUR PRIMARY TASK: Analyze THIS SPECIFIC ENTITY in detail. Do NOT give a general overview "
+            "of all flights/ships/assets. Focus your entire analysis on the selected target.\n\n"
+            "The JSON below contains:\n"
+            "- Top-level fields (type, id, name, callsign, etc.) = THE SELECTED ENTITY — this is your primary focus\n"
+            "- 'active_data' field (if present) = background situational awareness from other live feeds. "
+            "Only reference this for regional context or if the user asks about the broader picture.\n\n"
+            "ENTITY & CONTEXT DATA:\n"
             f"```json\n{context}\n```\n\n"
             "INSTRUCTIONS:\n"
-            "- Analyze the entity data thoroughly\n"
-            "- Use ALL data fields provided — coordinates, IDs, callsigns, flags, metadata\n"
-            "- Reference LIVE news/social/GDELT feeds when relevant to the question\n"
-            "- If the user asks about a region, summarize news and events from the live feeds for that area\n"
-            "- Provide intelligence-grade analysis: what is it, why it matters, what to watch\n"
-            "- For aircraft: analyze callsign patterns, altitude, speed, registration country\n"
-            "- For vessels: flag state risk, route patterns, AIS anomalies, sanctions exposure\n"
+            f"- Focus on {entity_name or 'the selected entity'} — analyze it specifically and thoroughly\n"
+            "- Use ALL entity fields: coordinates, IDs, callsigns, registration, altitude, speed, route, flags, metadata\n"
+            "- For aircraft: identify the operator from callsign/registration, analyze the route (origin->destination), "
+            "aircraft type capabilities, altitude/speed profile, any unusual patterns\n"
+            "- For vessels: flag state risk, route patterns, AIS anomalies, vessel type, sanctions exposure\n"
             "- For facilities: strategic significance, regional context, threat landscape\n"
             "- For cyber threats: TTPs, attribution indicators, IOCs, mitigation\n"
-            "- For weather/natural events: impact on infrastructure, affected assets\n"
-            "- Be concise but thorough. Use your full knowledge.\n\n"
+            "- Only reference live news/social/GDELT feeds from active_data if they're directly relevant to this entity\n"
+            "- Provide intelligence-grade analysis: what is it, why it matters, what to watch\n"
+            "- Be concise but thorough. Do NOT pad with generic recommendations.\n\n"
             f"{self._format_history(history)}"
             f"---\n\nCurrent question: {question}"
         )
