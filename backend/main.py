@@ -570,6 +570,47 @@ async def api_ollama_models():
     return await asyncio.to_thread(_get, "/ollama/models")
 
 
+# ---------------------------------------------------------------------------
+# User Scanner — Email/Username OSINT + Hudson Rock
+# ---------------------------------------------------------------------------
+
+class EmailScanBody(BaseModel):
+    email: str
+
+
+@app.post("/api/osint/email-scan")
+async def api_osint_email_scan(body: EmailScanBody):
+    """Scan email across 107 platforms for registrations."""
+    import asyncio
+    from services.osint_bridge import user_scanner_email
+    return await asyncio.to_thread(user_scanner_email, body.email)
+
+
+class UsernameScanBody(BaseModel):
+    username: str
+
+
+@app.post("/api/osint/username-scan")
+async def api_osint_username_scan(body: UsernameScanBody):
+    """Scan username across 91 platforms for account existence."""
+    import asyncio
+    from services.osint_bridge import user_scanner_username
+    return await asyncio.to_thread(user_scanner_username, body.username)
+
+
+class HudsonRockBody(BaseModel):
+    target: str
+    is_email: bool = False
+
+
+@app.post("/api/osint/hudson-rock")
+async def api_osint_hudson_rock(body: HudsonRockBody):
+    """Query Hudson Rock infostealer intelligence."""
+    import asyncio
+    from services.osint_bridge import user_scanner_hudson_rock
+    return await asyncio.to_thread(user_scanner_hudson_rock, body.target, body.is_email)
+
+
 @app.get("/api/debug-latest")
 async def debug_latest_data():
     return list(get_latest_data().keys())

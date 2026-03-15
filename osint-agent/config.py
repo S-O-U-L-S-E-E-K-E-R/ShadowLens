@@ -171,4 +171,10 @@ def detect_tools() -> dict:
         "path": os.path.join(SNORT_LOG_DIR, SNORT_ALERT_FILE),
         "available": os.path.isdir(SNORT_LOG_DIR),
     }
+    # User Scanner — Python library
+    try:
+        import user_scanner
+        status["user_scanner"] = {"path": "library", "available": True}
+    except ImportError:
+        status["user_scanner"] = {"path": "library", "available": False}
     return status

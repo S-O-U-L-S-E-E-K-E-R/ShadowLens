@@ -76,6 +76,24 @@ def _put(endpoint: str, json_data: dict, read_timeout: int = READ_TIMEOUT) -> di
     return {"status": "unavailable", "data": []}
 
 
+USER_SCANNER_TIMEOUT = 120  # email scans across 107 platforms can take time
+
+
+def user_scanner_email(email: str) -> dict:
+    """Scan email registrations via user-scanner on the OSINT agent."""
+    return _post("/user-scanner/email", {"email": email}, read_timeout=USER_SCANNER_TIMEOUT)
+
+
+def user_scanner_username(username: str) -> dict:
+    """Scan username accounts via user-scanner on the OSINT agent."""
+    return _post("/user-scanner/username", {"username": username}, read_timeout=USER_SCANNER_TIMEOUT)
+
+
+def user_scanner_hudson_rock(target: str, is_email: bool = False) -> dict:
+    """Query Hudson Rock infostealer API via the OSINT agent."""
+    return _post("/user-scanner/hudson-rock", {"target": target, "is_email": is_email}, read_timeout=30)
+
+
 def fetch_kismet_devices() -> list:
     """Fetch WiFi/BT devices from Kismet via the OSINT agent."""
     return _get("/kismet/devices")

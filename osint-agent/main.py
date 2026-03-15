@@ -25,6 +25,7 @@ from runners.spiderfoot import SpiderFootRunner
 from runners.deep_search import DeepSearchRunner
 from runners.autorecon import AutoReconRunner
 from runners.base import get_job, list_jobs
+from runners.user_scanner import UserScannerRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ whatweb = WhatWebRunner()
 spiderfoot = SpiderFootRunner()
 deep_search = DeepSearchRunner()
 autorecon = AutoReconRunner()
+user_scanner = UserScannerRunner()
 
 
 @asynccontextmanager
@@ -414,6 +416,51 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- User Scanner (Email/Username OSINT + Hudson Rock) ---
+
+class EmailScanRequest(BaseModel):
+    email: str
+
+
+@app.post("/user-scanner/email")
+async def user_scanner_email_scan(req: EmailScanRequest):
+    """Scan email across 107 platforms for account registrations."""
+    try:
+        return await user_scanner.scan_email(req.email)
+    except Exception as e:
+        logger.error(f"User scanner email error: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+class UsernameScanRequest(BaseModel):
+    username: str
+
+
+@app.post("/user-scanner/username")
+async def user_scanner_username_scan(req: UsernameScanRequest):
+    """Scan username across 91 platforms for account existence."""
+    try:
+        return await user_scanner.scan_username(req.username)
+    except Exception as e:
+        logger.error(f"User scanner username error: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+class HudsonRockRequest(BaseModel):
+    target: str
+    is_email: bool = False
+
+
+@app.post("/user-scanner/hudson-rock")
+async def user_scanner_hudson_rock(req: HudsonRockRequest):
+    """Query Hudson Rock infostealer intelligence API."""
+    try:
+        return await user_scanner.hudson_rock_lookup(req.target, req.is_email)
+    except Exception as e:
+        logger.error(f"Hudson Rock error: {e}")
+        return {"status": "error", "error": str(e)}
 
 
 # --- LLM Provider Settings ---

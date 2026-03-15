@@ -20,6 +20,7 @@ from runners.base import BaseToolRunner
 from runners.harvester import HarvesterRunner
 from runners.spiderfoot import SpiderFootRunner
 from runners.person_search import PersonSearchRunner
+from runners.user_scanner import UserScannerRunner
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class DeepSearchRunner(BaseToolRunner):
         self._harvester = HarvesterRunner()
         self._spiderfoot = SpiderFootRunner()
         self._person_search = PersonSearchRunner()
+        self._user_scanner = UserScannerRunner()
 
     # ------------------------------------------------------------------
     # Public API
@@ -191,17 +193,21 @@ class DeepSearchRunner(BaseToolRunner):
 
     async def _search_email(self, email: str) -> tuple[dict, list[str], list[dict]]:
         domain = email.split("@", 1)[1] if "@" in email else email
-        # Run h8mail + harvester + emailharvester + HIBP + holehe in parallel
-        h8, harvester, emailhv, hibp, holehe = await asyncio.gather(
+        # Run all email OSINT tools in parallel
+        h8, harvester, emailhv, hibp, holehe, uscan, hudson = await asyncio.gather(
             self._run_h8mail(email),
             self._run_harvester(domain),
             self._run_emailharvester(domain),
             self._run_hibp(email),
             self._run_holehe(email),
+            self._run_user_scanner_email(email),
+            self._run_hudson_rock(email, is_email=True),
         )
         results = {"hibp": hibp, "h8mail": h8, "holehe": holehe,
-                   "harvester": harvester, "emailharvester": emailhv}
-        tools_run = ["hibp", "h8mail", "holehe", "harvester", "emailharvester"]
+                   "harvester": harvester, "emailharvester": emailhv,
+                   "user_scanner": uscan, "hudson_rock": hudson}
+        tools_run = ["hibp", "h8mail", "holehe", "harvester", "emailharvester",
+                     "user_scanner", "hudson_rock"]
         # Geolocate the email domain's server
         locations: list[dict] = []
         try:
@@ -217,8 +223,13 @@ class DeepSearchRunner(BaseToolRunner):
         return results, tools_run, locations
 
     async def _search_username(self, username: str) -> tuple[dict, list[str]]:
-        sherlock = await self._run_sherlock(username)
-        return {"sherlock": sherlock}, ["sherlock"]
+        sherlock, uscan, hudson = await asyncio.gather(
+            self._run_sherlock(username),
+            self._run_user_scanner_username(username),
+            self._run_hudson_rock(username, is_email=False),
+        )
+        return {"sherlock": sherlock, "user_scanner": uscan, "hudson_rock": hudson}, \
+               ["sherlock", "user_scanner", "hudson_rock"]
 
     async def _search_phone(self, phone: str) -> tuple[dict, list[str], list[dict]]:
         """Phone number lookup via PhoneInfoga + phonenumbers + numverify."""
@@ -544,6 +555,30 @@ class DeepSearchRunner(BaseToolRunner):
             return {"registered_on": registered, "total": len(registered)}
         except Exception as exc:
             return {"error": str(exc), "registered_on": []}
+
+    async def _run_user_scanner_email(self, email: str) -> dict:
+        """Run user-scanner email registration scan (107 platforms)."""
+        try:
+            return await self._user_scanner.scan_email(email)
+        except Exception as e:
+            logger.warning(f"user-scanner email scan failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_user_scanner_username(self, username: str) -> dict:
+        """Run user-scanner username availability scan (91 platforms)."""
+        try:
+            return await self._user_scanner.scan_username(username)
+        except Exception as e:
+            logger.warning(f"user-scanner username scan failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_hudson_rock(self, target: str, is_email: bool = False) -> dict:
+        """Run Hudson Rock infostealer lookup."""
+        try:
+            return await self._user_scanner.hudson_rock_lookup(target, is_email)
+        except Exception as e:
+            logger.warning(f"Hudson Rock lookup failed: {e}")
+            return {"error": str(e)}
 
     async def _run_whois(self, target: str) -> dict:
         """Run whois lookup and parse the output into structured fields."""
@@ -1367,6 +1402,11 @@ class DeepSearchRunner(BaseToolRunner):
                     highlights.append(f"ISP={data['isp']}")
                 if "a_records" in data:
                     highlights.append(f"{len(data['a_records'])} A records")
+                if "total_found" in data:
+                    highlights.append(f"{data['total_found']}/{data.get('total_checked', '?')} accounts found")
+                if "infections_found" in data:
+                    count = data["infections_found"]
+                    highlights.append(f"{count} infostealer infection{'s' if count != 1 else ''}")
 
                 if highlights:
                     parts.append(f"  {tool}: {', '.join(highlights)}")

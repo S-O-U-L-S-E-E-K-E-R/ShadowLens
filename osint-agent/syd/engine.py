@@ -32,7 +32,7 @@ SCAN_ENTITY_TYPES = {'nmap_host', 'nuclei_vuln', 'snort_alert', 'kismet_device'}
 # OSINT trigger keywords — if the question contains these, enable tools
 OSINT_KEYWORDS = [
     'scan ', 'run nmap', 'run nuclei', 'enumerate', 'recon ', 'reconnaissance',
-    'osint ', 'search for', 'look up', 'lookup', 'investigate ', 'find info',
+    'osint ', 'search for', 'look up', 'lookup', 'investigate ', 'find info', 'find ',
     'whois ', 'dns lookup', 'subdomain', 'harvest', 'sherlock',
     'deep search', 'research ', 'dig into', 'footprint',
     'find phone', 'find address', 'find email', 'find location',
@@ -40,12 +40,18 @@ OSINT_KEYWORDS = [
     'who owns', 'who is ', 'what is the ip', 'port scan',
     'vulnerability scan', 'check if ', 'is this ip', 'reverse lookup',
     'email lookup', 'username lookup', 'domain lookup', 'ip lookup',
+    'scan email', 'check email', 'email accounts', 'find accounts',
+    'find all accounts', 'accounts for', 'check username', 'scan username',
+    'username accounts', 'registered accounts', 'account lookup',
+    'what sites', 'what platforms', 'where is registered',
+    'hudson rock', 'infostealer', 'breach check', 'credential leak',
+    'compromised credentials', 'what accounts',
 ]
 
 # Location/mapping keywords — questions that need geocoding + map plotting
 LOCATE_KEYWORDS = [
     'plot ', 'plot on', 'locate ', 'map ', 'show on map', 'show me ',
-    'where is ', 'find ', 'fly to ', 'go to ', 'zoom to ',
+    'where is ', 'fly to ', 'go to ', 'zoom to ',
     'on the map', 'location of', 'place a marker', 'place marker',
     'mark ', 'mark the', 'pin ', 'pin the', 'pinpoint',
     'find the location', 'find location', 'put a pin', 'drop a pin',
