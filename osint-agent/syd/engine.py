@@ -1051,6 +1051,35 @@ class FridayEngine:
             except Exception as e:
                 return {"answer": f"Deep scan failed: {e}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": ""}
 
+        # IP threat enrichment — InternetDB + ThreatFox + Tor
+        ip_match = _re.search(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', question)
+        if ip_match and any(kw in q for kw in ['threat', 'vuln', 'ports', 'tor check', 'internetdb', 'enrich ip', 'check ip', 'scan ip']):
+            ip = ip_match.group(1)
+            import urllib.request
+            try:
+                resp = urllib.request.urlopen(f"http://localhost:8002/threat/ip/{ip}", timeout=15)
+                result = json.loads(resp.read())
+                idb = result.get("internetdb", {})
+                tfox = result.get("threatfox", {})
+                tor = result.get("tor", {})
+                summary = result.get("summary", {})
+                parts = [f"**Threat Intel for `{ip}`:**\n"]
+                parts.append(f"- **Open Ports ({summary.get('ports', 0)}):** {', '.join(str(p) for p in idb.get('ports', [])[:20]) or 'none'}")
+                if summary.get("vulns"):
+                    parts.append(f"- **Vulnerabilities ({summary['vulns']}):** {', '.join(idb.get('vulns', [])[:10])}")
+                if summary.get("hostnames"):
+                    parts.append(f"- **Hostnames:** {', '.join(summary['hostnames'][:5])}")
+                parts.append(f"- **Tor Exit Node:** {'YES' if summary.get('is_tor') else 'No'}")
+                if summary.get("threat_iocs"):
+                    parts.append(f"- **ThreatFox IOCs:** {summary['threat_iocs']} matching indicators")
+                if idb.get("cpes"):
+                    parts.append(f"- **CPEs:** {', '.join(idb['cpes'][:5])}")
+                if idb.get("tags"):
+                    parts.append(f"- **Tags:** {', '.join(idb['tags'])}")
+                return {"answer": "\n".join(parts), "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"IP: {ip} — {summary.get('ports',0)} ports, {summary.get('vulns',0)} vulns"}
+            except Exception as e:
+                pass  # Fall through to normal routing
+
         # Google email check
         if any(kw in q for kw in ['is this email on google', 'google email check', 'gmail check', 'check google']):
             import re

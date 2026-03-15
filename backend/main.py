@@ -621,6 +621,34 @@ async def api_ollama_models():
 
 
 # ---------------------------------------------------------------------------
+# Threat Intelligence — free, no-auth APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/api/threat/ip/{ip}")
+async def api_threat_ip(ip: str):
+    """Full IP enrichment — InternetDB + ThreatFox + Tor check."""
+    import asyncio
+    from services.osint_bridge import threat_enrich_ip
+    return await asyncio.to_thread(threat_enrich_ip, ip)
+
+
+@app.get("/api/threat/internetdb/{ip}")
+async def api_threat_internetdb(ip: str):
+    """Shodan InternetDB — free ports, vulns, hostnames for any IP."""
+    import asyncio
+    from services.osint_bridge import threat_internetdb
+    return await asyncio.to_thread(threat_internetdb, ip)
+
+
+@app.get("/api/threat/tor-check/{ip}")
+async def api_threat_tor(ip: str):
+    """Check if IP is a Tor exit node."""
+    import asyncio
+    from services.osint_bridge import threat_tor_check
+    return await asyncio.to_thread(threat_tor_check, ip)
+
+
+# ---------------------------------------------------------------------------
 # Telegram — public channel scraping + regional search
 # ---------------------------------------------------------------------------
 

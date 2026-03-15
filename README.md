@@ -49,6 +49,8 @@ The integrated OSINT agent (port 8002) provides one-click access to:
 
 **Cameras & Feeds:** `Windy Webcams` · `Insecam` (1,692 public cameras) · `21 CCTV pipeline ingestors`
 
+**Threat Intelligence:** `Shodan InternetDB` (free, no key) · `ThreatFox` · `URLhaus` · `MalwareBazaar` · `Tor exit node check` · `Feodo Tracker`
+
 **Analysis:** `IOC extraction` (IPs, domains, emails, hashes, CVEs) · `GeoJSON import`
 
 Deep OSINT search auto-detects input type (IP, domain, email, phone, username, hash) and runs the appropriate tool combination. Quick email scans return results in under 1 second with an option for deep 107-platform analysis.
@@ -229,7 +231,7 @@ All layers are independently toggleable from the left panel:
 | Layer | Source | Update | Key Required |
 |---|---|---|---|
 | GPS Jamming | NAC-P analysis from ADS-B | ~60s | No |
-| Cyber Threats | abuse.ch | ~10min | No |
+| Cyber Threats | abuse.ch (Feodo + ThreatFox + URLhaus) | ~10min | No |
 | Power Outages | PowerOutage.us | Manual | No |
 | Internet Outages | Cloudflare + IODA | Manual | No |
 
@@ -267,6 +269,8 @@ Transport for London JamCams, Singapore LTA, Austin TX TxDOT, NYC DOT, Tennessee
 * **Certificate Transparency** — Subdomain discovery via crt.sh (instant, no LLM)
 * **GeoJSON Import** — Upload arbitrary JSON/GeoJSON data as custom map overlay
 * **Insecam Database** — 1,692 public cameras worldwide integrated into CCTV mesh
+* **IP Threat Enrichment** — Instant InternetDB (ports/vulns/hostnames) + ThreatFox IOCs + Tor exit node check for any IP, no API key needed
+* **URLhaus Integration** — Recent malware URLs from abuse.ch added to cyber threats layer
 
 ---
 
@@ -360,7 +364,8 @@ ShadowLens/
 |   |   |-- wireless_osint.py      # Wigle WiFi/BT + wpa-sec credential leaks
 |   |   |-- telegram_scraper.py    # Telegram public channel scraper
 |   |   |-- ioc_extractor.py       # IOC extraction + cert transparency + SSL certs
-|   |   +-- google_osint.py        # Google email check + BSSID geolocation + DAL
+|   |   |-- google_osint.py        # Google email check + BSSID geolocation + DAL
+|   |   +-- threat_intel.py        # InternetDB + ThreatFox + URLhaus + MalwareBazaar + Tor
 |   +-- syd/                        # F.R.I.D.A.Y. engine
 |       |-- engine.py               # Core RAG pipeline (Claude Code + Ollama dual backend)
 |       |-- nmap_fact_extractor.py  # Nmap scan parser
@@ -443,6 +448,9 @@ WINDY_WEBCAMS_API_KEY=          # Live webcam discovery (api.windy.com)
 | `GET /api/osint/ssl-cert/{domain}` | SSL certificate details |
 | `GET /api/telegram/channel/{name}` | Scrape public Telegram channel |
 | `POST /api/telegram/search` | Search OSINT Telegram channels by keyword |
+| `GET /api/threat/ip/{ip}` | Full IP enrichment (InternetDB + ThreatFox + Tor) |
+| `GET /api/threat/internetdb/{ip}` | Free Shodan — ports, vulns, hostnames |
+| `GET /api/threat/tor-check/{ip}` | Check if IP is a Tor exit node |
 | `GET /api/wireless/nearby` | WiFi/BT device discovery via Wigle |
 | `POST /api/geojson/import` | Import arbitrary JSON/GeoJSON as map overlay |
 | `GET /api/settings/api-keys` | View configured API keys (obfuscated) |

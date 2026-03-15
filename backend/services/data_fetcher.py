@@ -1941,6 +1941,36 @@ def fetch_cyber_threats():
         except Exception:
             pass
 
+        # URLhaus — recent malware URLs
+        try:
+            resp3 = requests.get("https://urlhaus-api.abuse.ch/v1/urls/recent/limit/50/", timeout=15)
+            if resp3.status_code == 200:
+                data3 = resp3.json()
+                for entry in (data3.get("urls") or [])[:50]:
+                    url_val = entry.get("url", "")
+                    host = ""
+                    try:
+                        host = url_val.split("//", 1)[1].split("/", 1)[0].split(":")[0]
+                    except (IndexError, AttributeError):
+                        pass
+                    threats.append({
+                        "id": f"urlhaus-{entry.get('id', '')}",
+                        "type": "malware_url",
+                        "ip": host,
+                        "port": "",
+                        "malware": ", ".join(entry.get("tags") or []),
+                        "country": "",
+                        "as_name": "",
+                        "as_number": "",
+                        "first_seen": entry.get("date_added", ""),
+                        "last_online": "",
+                        "status": entry.get("url_status", ""),
+                        "url": url_val,
+                        "threat": entry.get("threat", ""),
+                    })
+        except Exception:
+            pass
+
         # Merge in live Check Point ThreatCloud attacks
         live_attacks = list(_checkpoint_attacks)  # thread-safe snapshot
         threats.extend(live_attacks)

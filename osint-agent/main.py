@@ -30,6 +30,7 @@ from runners.wireless_osint import WirelessOsintRunner
 from runners.ioc_extractor import IocExtractorRunner
 from runners.telegram_scraper import TelegramScraperRunner
 from runners.google_osint import GoogleOsintRunner
+from runners.threat_intel import ThreatIntelRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ wireless_osint = WirelessOsintRunner()
 ioc_extractor = IocExtractorRunner()
 telegram_scraper = TelegramScraperRunner()
 google_osint = GoogleOsintRunner()
+threat_intel = ThreatIntelRunner()
 
 
 @asynccontextmanager
@@ -424,6 +426,57 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- Threat Intelligence (free, no auth) ---
+
+@app.get("/threat/ip/{ip}")
+async def threat_ip_enrich(ip: str):
+    """Full IP enrichment — InternetDB + ThreatFox + Tor exit check."""
+    return await threat_intel.enrich_ip(ip)
+
+
+@app.get("/threat/internetdb/{ip}")
+async def threat_internetdb(ip: str):
+    """Shodan InternetDB — free IP lookup (ports, vulns, hostnames)."""
+    return await threat_intel.internetdb_lookup(ip)
+
+
+class UrlhausRequest(BaseModel):
+    url: str
+
+
+@app.post("/threat/urlhaus")
+async def threat_urlhaus(req: UrlhausRequest):
+    """Check URL against URLhaus malware database."""
+    return await threat_intel.urlhaus_lookup(req.url)
+
+
+class ThreatfoxRequest(BaseModel):
+    query: str
+    query_type: str = "search_ioc"
+
+
+@app.post("/threat/threatfox")
+async def threat_threatfox(req: ThreatfoxRequest):
+    """Search ThreatFox IOC database."""
+    return await threat_intel.threatfox_search(req.query, req.query_type)
+
+
+class HashLookupRequest(BaseModel):
+    hash: str
+
+
+@app.post("/threat/malwarebazaar")
+async def threat_malwarebazaar(req: HashLookupRequest):
+    """Lookup hash in MalwareBazaar malware database."""
+    return await threat_intel.malwarebazaar_hash(req.hash)
+
+
+@app.get("/threat/tor-check/{ip}")
+async def threat_tor_check(ip: str):
+    """Check if IP is a Tor exit node."""
+    return await threat_intel.check_tor_exit(ip)
 
 
 # --- Google OSINT (no auth required) ---

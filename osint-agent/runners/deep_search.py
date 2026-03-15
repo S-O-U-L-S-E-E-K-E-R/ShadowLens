@@ -23,6 +23,7 @@ from runners.person_search import PersonSearchRunner
 from runners.user_scanner import UserScannerRunner
 from runners.ioc_extractor import IocExtractorRunner
 from runners.google_osint import GoogleOsintRunner
+from runners.threat_intel import ThreatIntelRunner
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,7 @@ class DeepSearchRunner(BaseToolRunner):
         self._user_scanner = UserScannerRunner()
         self._ioc_extractor = IocExtractorRunner()
         self._google_osint = GoogleOsintRunner()
+        self._threat_intel = ThreatIntelRunner()
 
     # ------------------------------------------------------------------
     # Public API
@@ -298,10 +300,11 @@ class DeepSearchRunner(BaseToolRunner):
                        "whois": {"note": "RFC1918 private address"}, "shodan": {}}
             return results, ["nmap"], locations
 
-        # Public IP — run whois + nmap + ip geolocation + shodan in parallel
-        whois_res, geo, nmap_res, shodan_res = await asyncio.gather(
+        # Public IP — run all tools in parallel including threat intel
+        whois_res, geo, nmap_res, shodan_res, threat_enrichment = await asyncio.gather(
             self._run_whois(ip), self._run_ip_geolocation(ip),
             self._run_nmap_quick(ip), self._run_shodan(ip),
+            self._run_threat_enrich_ip(ip),
         )
         locations = []
         if geo.get("lat") and geo.get("lon"):
@@ -310,8 +313,11 @@ class DeepSearchRunner(BaseToolRunner):
                 "label": f"{ip} — {geo.get('city', '')}, {geo.get('country', '')}",
                 "source": "ip-api",
             })
-        results = {"whois": whois_res, "geolocation": geo, "nmap": nmap_res, "shodan": shodan_res}
-        tools_run = ["whois", "geolocation", "nmap", "shodan"]
+        results = {"whois": whois_res, "geolocation": geo, "nmap": nmap_res, "shodan": shodan_res,
+                   "internetdb": threat_enrichment.get("internetdb", {}),
+                   "threatfox": threat_enrichment.get("threatfox", {}),
+                   "tor_check": threat_enrichment.get("tor", {})}
+        tools_run = ["whois", "geolocation", "nmap", "shodan", "internetdb", "threatfox", "tor_check"]
         return results, tools_run, locations
 
     async def _search_domain(self, domain: str) -> tuple[dict, list[str], list[dict]]:
@@ -589,6 +595,14 @@ class DeepSearchRunner(BaseToolRunner):
             return await self._user_scanner.hudson_rock_lookup(target, is_email)
         except Exception as e:
             logger.warning(f"Hudson Rock lookup failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_threat_enrich_ip(self, ip: str) -> dict:
+        """Full IP threat enrichment — InternetDB + ThreatFox + Tor."""
+        try:
+            return await self._threat_intel.enrich_ip(ip)
+        except Exception as e:
+            logger.warning(f"Threat intel IP enrichment failed: {e}")
             return {"error": str(e)}
 
     async def _run_google_email_check(self, email: str) -> dict:

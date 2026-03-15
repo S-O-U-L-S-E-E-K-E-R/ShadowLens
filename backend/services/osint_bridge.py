@@ -119,6 +119,21 @@ def ssl_cert_info(domain: str) -> dict:
     return _get(f"/cert/info/{domain}")
 
 
+def threat_enrich_ip(ip: str) -> dict:
+    """Full IP threat enrichment — InternetDB + ThreatFox + Tor."""
+    return _get(f"/threat/ip/{ip}")
+
+
+def threat_internetdb(ip: str) -> dict:
+    """Shodan InternetDB lookup."""
+    return _get(f"/threat/internetdb/{ip}")
+
+
+def threat_tor_check(ip: str) -> dict:
+    """Check if IP is a Tor exit node."""
+    return _get(f"/threat/tor-check/{ip}")
+
+
 TELEGRAM_TIMEOUT = 30
 
 
