@@ -76,6 +76,34 @@ def _put(endpoint: str, json_data: dict, read_timeout: int = READ_TIMEOUT) -> di
     return {"status": "unavailable", "data": []}
 
 
+WIRELESS_TIMEOUT = 20
+
+
+def wireless_nearby(lat: float, lon: float, mode: str = "all", radius: float = 0.01) -> dict:
+    """Search WiFi/BT devices near coordinates via Wigle."""
+    try:
+        resp = requests.get(
+            f"{OSINT_AGENT_URL}/wireless/nearby",
+            params={"lat": lat, "lon": lon, "mode": mode, "radius": radius},
+            timeout=(CONNECT_TIMEOUT, WIRELESS_TIMEOUT),
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        logger.warning(f"Wireless OSINT error: {e}")
+    return {"status": "error", "devices": []}
+
+
+def wireless_ssid_search(ssid: str) -> dict:
+    """Search for a specific WiFi SSID globally."""
+    return _get(f"/wireless/ssid/{ssid}")
+
+
+def wireless_bssid_search(bssid: str) -> dict:
+    """Search for a specific BSSID (MAC address)."""
+    return _get(f"/wireless/bssid/{bssid}")
+
+
 USER_SCANNER_TIMEOUT = 120  # email scans across 107 platforms can take time
 
 

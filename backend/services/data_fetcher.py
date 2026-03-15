@@ -16,7 +16,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import concurrent.futures
 from sgp4.api import Satrec, WGS72
 from sgp4.api import jday
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 from services.cctv_pipeline import init_db, TFLJamCamIngestor, LTASingaporeIngestor, AustinTXIngestor, NYCDOTIngestor, TDOTSmartWayIngestor, ClarksvilleCityIngestor, KYTCFortCampbellIngestor, ClarksvilleAreaWebcamIngestor, NC5SkynetIngestor, WSMVWeatherCamIngestor, NPSSmokiesIngestor, ResortCamsTNIngestor, GatlinburgTouristIngestor, CaltransIngestor, FL511Ingestor, VDOTIngestor, LA511Ingestor, LAWetmetIngestor, KSLAStaticIngestor, get_all_cameras

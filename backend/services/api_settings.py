@@ -303,6 +303,25 @@ API_REGISTRY = [
         "url": "https://www.misp-project.org/",
         "required": False,
     },
+    # ---- Wireless OSINT ----
+    {
+        "id": "wigle_api_name",
+        "env_key": "WIGLE_API_NAME",
+        "name": "Wigle.net — API Name",
+        "description": "Wigle wardriving database API name (username). Provides global WiFi/Bluetooth device discovery by location. Free account at wigle.net.",
+        "category": "SIGINT",
+        "url": "https://wigle.net/account",
+        "required": False,
+    },
+    {
+        "id": "wigle_api_token",
+        "env_key": "WIGLE_API_TOKEN",
+        "name": "Wigle.net — API Token",
+        "description": "Wigle API token paired with the API Name above. Used for authenticated queries to the wardriving database.",
+        "category": "SIGINT",
+        "url": "https://wigle.net/account",
+        "required": False,
+    },
     # ---- Webcams ----
     {
         "id": "windy_webcams_api_key",
@@ -366,6 +385,7 @@ _OSINT_KEYS = {
     "OTX_API_KEY", "MISP_API_KEY", "MISP_URL", "KISMET_API_KEY",
     "HACKERONE_API_TOKEN",
     "WINDY_WEBCAMS_API_KEY",
+    "WIGLE_API_NAME", "WIGLE_API_TOKEN",
 }
 
 

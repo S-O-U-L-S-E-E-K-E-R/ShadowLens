@@ -19,6 +19,7 @@ services:
     volumes:
       - backend_data:/app/data
       - ./osint-data:/app/osint-data
+      - ./backend/.env:/app/.env
     restart: unless-stopped
 
   frontend:

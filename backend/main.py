@@ -234,6 +234,31 @@ async def live_data_regional(lat: float, lng: float, radius: float = 5.0, countr
     # searched specifically for this region).
     filtered['social_media'] = regional.get('social_media', [])
 
+    # Fetch Wigle WiFi/BT devices for the regional pin location
+    try:
+        from services.osint_bridge import wireless_nearby
+        wigle = await asyncio.to_thread(wireless_nearby, lat, lng, "all", 0.02)
+        if isinstance(wigle, dict) and wigle.get("devices"):
+            wigle_devices = []
+            for wd in wigle["devices"]:
+                wigle_devices.append({
+                    "mac": wd.get("bssid", ""),
+                    "ssid": wd.get("ssid", ""),
+                    "device_type": wd.get("device_type", "router"),
+                    "signal_dbm": wd.get("signal_dbm", 0),
+                    "channel": wd.get("channel", ""),
+                    "encryption": wd.get("encryption", ""),
+                    "manufacturer": wd.get("vendor", ""),
+                    "lat": wd.get("lat"),
+                    "lon": wd.get("lon"),
+                    "last_seen": wd.get("last_seen", ""),
+                    "leaked": wd.get("leaked", False),
+                    "source": "wigle",
+                })
+            filtered['kismet_devices'] = filtered.get('kismet_devices', []) + wigle_devices
+    except Exception:
+        pass
+
     # Non-geo data
     filtered['stocks'] = d.get('stocks', {})
     filtered['oil'] = d.get('oil', {})
@@ -321,6 +346,31 @@ async def live_data_regional_stream(lat: float, lng: float, radius: float = 5.0,
             'country': cc_upper,
             'region': region_name,
         }
+
+        # Fetch Wigle WiFi/BT devices for the pin location (adds to kismet_devices)
+        try:
+            from services.osint_bridge import wireless_nearby
+            wigle = await asyncio.to_thread(wireless_nearby, lat, lng, "all", 0.02)
+            if isinstance(wigle, dict) and wigle.get("devices"):
+                wigle_devices = []
+                for wd in wigle["devices"]:
+                    wigle_devices.append({
+                        "mac": wd.get("bssid", ""),
+                        "ssid": wd.get("ssid", ""),
+                        "device_type": wd.get("device_type", "router"),
+                        "signal_dbm": wd.get("signal_dbm", 0),
+                        "channel": wd.get("channel", ""),
+                        "encryption": wd.get("encryption", ""),
+                        "manufacturer": wd.get("vendor", ""),
+                        "lat": wd.get("lat"),
+                        "lon": wd.get("lon"),
+                        "last_seen": wd.get("last_seen", ""),
+                        "leaked": wd.get("leaked", False),
+                        "source": "wigle",
+                    })
+                filtered['kismet_devices'] = filtered.get('kismet_devices', []) + wigle_devices
+        except Exception:
+            pass
 
         # Send initial geo data immediately
         yield f"event: init\ndata: {json_mod.dumps(filtered, default=str)}\n\n"
@@ -568,6 +618,34 @@ async def api_ollama_models():
     import asyncio
     from services.osint_bridge import _get
     return await asyncio.to_thread(_get, "/ollama/models")
+
+
+# ---------------------------------------------------------------------------
+# Wireless OSINT — Wigle WiFi/Bluetooth + wpa-sec credential leaks
+# ---------------------------------------------------------------------------
+
+@app.get("/api/wireless/nearby")
+async def api_wireless_nearby(lat: float, lon: float, mode: str = "all", radius: float = 0.01):
+    """Search WiFi/Bluetooth devices near coordinates."""
+    import asyncio
+    from services.osint_bridge import wireless_nearby
+    return await asyncio.to_thread(wireless_nearby, lat, lon, mode, radius)
+
+
+@app.get("/api/wireless/ssid/{ssid}")
+async def api_wireless_ssid(ssid: str):
+    """Search for a specific WiFi SSID globally."""
+    import asyncio
+    from services.osint_bridge import wireless_ssid_search
+    return await asyncio.to_thread(wireless_ssid_search, ssid)
+
+
+@app.get("/api/wireless/bssid/{bssid}")
+async def api_wireless_bssid(bssid: str):
+    """Search for a specific BSSID (MAC address)."""
+    import asyncio
+    from services.osint_bridge import wireless_bssid_search
+    return await asyncio.to_thread(wireless_bssid_search, bssid)
 
 
 # ---------------------------------------------------------------------------

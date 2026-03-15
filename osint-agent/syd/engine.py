@@ -59,6 +59,16 @@ LOCATE_KEYWORDS = [
     'mark on map', 'pin on map', 'find on map', 'find it on',
 ]
 
+# Wireless device discovery keywords — triggers Wigle WiFi/BT search
+WIRELESS_KEYWORDS = [
+    'wifi near', 'wifi device', 'wifi network', 'wireless device', 'wireless network',
+    'bluetooth device', 'bluetooth near', 'bt device', 'find wifi', 'find bluetooth',
+    'find wireless', 'show wifi', 'show bluetooth', 'scan wifi', 'scan bluetooth',
+    'wigle', 'wardriving', 'wireless scan', 'wifi scan', 'bt scan',
+    'leaked wifi', 'leaked credential', 'wifi password', 'wpa-sec',
+    'ssid ', 'bssid ', 'find ssid', 'find bssid',
+]
+
 # Camera/webcam discovery keywords — triggers nearby webcam search
 CAMERA_KEYWORDS = [
     'find camera', 'find cctv', 'find webcam', 'camera feed', 'cctv feed',
@@ -410,6 +420,11 @@ class FridayEngine:
             return True
         return False
 
+    def _needs_wireless(self, question: str) -> bool:
+        """Detect if the question is a wireless device discovery request."""
+        q = question.lower()
+        return any(kw in q for kw in WIRELESS_KEYWORDS)
+
     def _needs_camera(self, question: str) -> bool:
         """Detect if the question is a camera/webcam discovery request."""
         q = question.lower()
@@ -559,9 +574,14 @@ class FridayEngine:
         needs_osint = self._needs_osint(question)
         needs_locate = self._needs_locate(question)
         needs_camera = self._needs_camera(question)
+        needs_wireless = self._needs_wireless(question)
         hist = history or []
 
-        # Route 0: Camera/webcam discovery — find live feeds near a location
+        # Route 0a: Wireless device discovery — Wigle WiFi/BT search
+        if needs_wireless:
+            return self._handle_wireless_query(question, context, hist)
+
+        # Route 0b: Camera/webcam discovery — find live feeds near a location
         if needs_camera:
             return self._handle_camera_query(question, context, hist)
 
@@ -854,6 +874,121 @@ class FridayEngine:
                         break
 
         return locations[:20]  # Cap at 20 to avoid huge payloads
+
+    def _handle_wireless_query(self, question: str, context: str, history: list = None) -> dict:
+        """Handle wireless device discovery — Wigle WiFi/Bluetooth search."""
+        import asyncio
+        from runners.wireless_osint import WirelessOsintRunner
+
+        q_lower = question.lower()
+
+        # Detect mode
+        mode = "all"
+        if any(kw in q_lower for kw in ["bluetooth", "bt device", "bt scan"]):
+            mode = "bluetooth"
+        elif any(kw in q_lower for kw in ["wifi", "wireless network", "ssid", "router"]):
+            mode = "wifi"
+
+        # Check for SSID/BSSID specific search
+        import re
+        ssid_match = re.search(r'ssid\s+["\']?([^"\']+)["\']?', q_lower)
+        bssid_match = re.search(r'bssid\s+([0-9a-f:]{17})', q_lower, re.IGNORECASE)
+        mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}', question)
+
+        runner = WirelessOsintRunner()
+
+        if bssid_match or mac_match:
+            bssid = (bssid_match or mac_match).group(0)
+            result = asyncio.get_event_loop().run_in_executor(None, lambda: asyncio.run(runner.search_bssid(bssid)))
+            # Can't nest event loops — use thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(lambda: asyncio.run(runner.search_bssid(bssid))).result()
+            devices = result.get("devices", [])
+            answer = f"Found **{len(devices)} result(s)** for BSSID `{bssid}`."
+            if devices:
+                answer += "\n\n" + "\n".join([f"- **{d.get('ssid', 'Unknown')}** ({d.get('vendor', '')}) at ({d.get('lat', 0):.4f}, {d.get('lon', 0):.4f})" for d in devices[:10]])
+            locations = [{"lat": d["lat"], "lon": d["lon"], "label": d.get("ssid") or d.get("bssid", "Device"), "source": "wigle"} for d in devices if d.get("lat")]
+            return {"answer": answer, "mode": "wireless_search", "query": question, "validated": True, "issues": [], "facts_summary": f"BSSID search: {bssid}", "locations": locations}
+
+        if ssid_match:
+            ssid = ssid_match.group(1).strip()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(lambda: asyncio.run(runner.search_ssid(ssid))).result()
+            devices = result.get("devices", [])
+            answer = f"Found **{len(devices)} network(s)** matching SSID `{ssid}`."
+            if devices:
+                leaked = [d for d in devices if d.get("leaked")]
+                if leaked:
+                    answer += f"\n\n**WARNING: {len(leaked)} network(s) have leaked credentials (wpa-sec).**"
+                answer += "\n\n" + "\n".join([f"- **{d.get('ssid')}** ({d.get('vendor', '')}) at ({d.get('lat', 0):.4f}, {d.get('lon', 0):.4f}){' — LEAKED' if d.get('leaked') else ''}" for d in devices[:15]])
+            locations = [{"lat": d["lat"], "lon": d["lon"], "label": f"{'⚠ ' if d.get('leaked') else ''}{d.get('ssid', 'WiFi')}", "source": "wigle"} for d in devices if d.get("lat")]
+            return {"answer": answer, "mode": "wireless_search", "query": question, "validated": True, "issues": [], "facts_summary": f"SSID search: {ssid}", "locations": locations}
+
+        # Location-based search — extract coordinates
+        lat, lon = None, None
+        try:
+            ctx = json.loads(context) if context else {}
+            lat = ctx.get("lat") or ctx.get("latitude")
+            lon = ctx.get("lon") or ctx.get("lng") or ctx.get("longitude")
+            if lat and lon:
+                lat, lon = float(lat), float(lon)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+
+        if not lat or not lon:
+            # Try to geocode from the question
+            location_text = q_lower
+            for kw in WIRELESS_KEYWORDS:
+                location_text = location_text.replace(kw, " ")
+            noise = {"find", "show", "get", "scan", "search", "near", "around", "at", "in", "the", "a", "for", "devices", "networks"}
+            words = [w for w in location_text.split() if w not in noise and not re.match(r"^\d+$", w)]
+            location_text = " ".join(words).strip()
+            if location_text:
+                geo = self._geocode_location(location_text)
+                if geo:
+                    lat, lon = geo["lat"], geo["lon"]
+
+        if not lat or not lon:
+            return {"answer": "I couldn't determine the location. Try specifying a city or coordinates.", "mode": "wireless_search", "validated": True, "issues": [], "facts_summary": ""}
+
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = pool.submit(lambda: asyncio.run(runner.search_nearby(lat, lon, mode, radius=0.01))).result()
+
+        devices = result.get("devices", [])
+        leaked_count = result.get("leaked_count", 0)
+
+        if devices:
+            by_type = {}
+            for d in devices:
+                t = d.get("device_type", "unknown")
+                by_type.setdefault(t, []).append(d)
+
+            type_summary = ", ".join([f"{len(v)} {k}" for k, v in sorted(by_type.items(), key=lambda x: -len(x[1]))])
+            answer = f"Found **{len(devices)} wireless device(s)** near ({lat:.4f}, {lon:.4f}):\n\n"
+            answer += f"**Breakdown:** {type_summary}\n"
+            if leaked_count:
+                answer += f"\n**⚠ {leaked_count} WiFi network(s) have leaked credentials (wpa-sec)**\n"
+            answer += "\n**Top devices:**\n"
+            for d in devices[:15]:
+                leaked_flag = " — **LEAKED**" if d.get("leaked") else ""
+                answer += f"- [{d.get('device_type', '?')}] **{d.get('ssid') or d.get('bssid', 'Unknown')}** ({d.get('vendor', '')}){leaked_flag}\n"
+        else:
+            answer = f"No wireless devices found near ({lat:.4f}, {lon:.4f}) via Wigle. The area may not have wardriving coverage."
+
+        locations = [{"lat": d["lat"], "lon": d["lon"], "label": f"{'⚠ ' if d.get('leaked') else ''}{d.get('ssid') or d.get('bssid', 'Device')}", "source": "wigle"} for d in devices if d.get("lat")]
+
+        return {
+            "answer": answer,
+            "mode": "wireless_search",
+            "query": question,
+            "validated": True,
+            "issues": [],
+            "facts_summary": f"Wireless search: {len(devices)} devices, {leaked_count} leaked",
+            "locations": locations,
+        }
 
     def _handle_camera_query(self, question: str, context: str, history: list = None) -> dict:
         """Handle camera/webcam discovery — find live feeds near a location."""

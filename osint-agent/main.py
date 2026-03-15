@@ -26,6 +26,7 @@ from runners.deep_search import DeepSearchRunner
 from runners.autorecon import AutoReconRunner
 from runners.base import get_job, list_jobs
 from runners.user_scanner import UserScannerRunner
+from runners.wireless_osint import WirelessOsintRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ spiderfoot = SpiderFootRunner()
 deep_search = DeepSearchRunner()
 autorecon = AutoReconRunner()
 user_scanner = UserScannerRunner()
+wireless_osint = WirelessOsintRunner()
 
 
 @asynccontextmanager
@@ -416,6 +418,26 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- Wireless OSINT (Wigle WiFi/BT + wpa-sec credential leaks) ---
+
+@app.get("/wireless/nearby")
+async def wireless_nearby(lat: float, lon: float, mode: str = "all", radius: float = 0.01):
+    """Search for WiFi/Bluetooth devices near coordinates via Wigle."""
+    return await wireless_osint.search_nearby(lat, lon, mode, radius)
+
+
+@app.get("/wireless/ssid/{ssid}")
+async def wireless_ssid(ssid: str):
+    """Search for a specific WiFi SSID globally."""
+    return await wireless_osint.search_ssid(ssid)
+
+
+@app.get("/wireless/bssid/{bssid}")
+async def wireless_bssid(bssid: str):
+    """Search for a specific BSSID (MAC address)."""
+    return await wireless_osint.search_bssid(bssid)
 
 
 # --- User Scanner (Email/Username OSINT + Hudson Rock) ---
