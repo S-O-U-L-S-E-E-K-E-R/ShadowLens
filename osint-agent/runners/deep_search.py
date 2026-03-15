@@ -22,6 +22,7 @@ from runners.spiderfoot import SpiderFootRunner
 from runners.person_search import PersonSearchRunner
 from runners.user_scanner import UserScannerRunner
 from runners.ioc_extractor import IocExtractorRunner
+from runners.google_osint import GoogleOsintRunner
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ class DeepSearchRunner(BaseToolRunner):
         self._person_search = PersonSearchRunner()
         self._user_scanner = UserScannerRunner()
         self._ioc_extractor = IocExtractorRunner()
+        self._google_osint = GoogleOsintRunner()
 
     # ------------------------------------------------------------------
     # Public API
@@ -196,7 +198,7 @@ class DeepSearchRunner(BaseToolRunner):
     async def _search_email(self, email: str) -> tuple[dict, list[str], list[dict]]:
         domain = email.split("@", 1)[1] if "@" in email else email
         # Run all email OSINT tools in parallel
-        h8, harvester, emailhv, hibp, holehe, uscan, hudson = await asyncio.gather(
+        h8, harvester, emailhv, hibp, holehe, uscan, hudson, gcheck = await asyncio.gather(
             self._run_h8mail(email),
             self._run_harvester(domain),
             self._run_emailharvester(domain),
@@ -204,12 +206,14 @@ class DeepSearchRunner(BaseToolRunner):
             self._run_holehe(email),
             self._run_user_scanner_email(email),
             self._run_hudson_rock(email, is_email=True),
+            self._run_google_email_check(email),
         )
         results = {"hibp": hibp, "h8mail": h8, "holehe": holehe,
                    "harvester": harvester, "emailharvester": emailhv,
-                   "user_scanner": uscan, "hudson_rock": hudson}
+                   "user_scanner": uscan, "hudson_rock": hudson,
+                   "google_check": gcheck}
         tools_run = ["hibp", "h8mail", "holehe", "harvester", "emailharvester",
-                     "user_scanner", "hudson_rock"]
+                     "user_scanner", "hudson_rock", "google_check"]
         # Geolocate the email domain's server
         locations: list[dict] = []
         try:
@@ -313,7 +317,7 @@ class DeepSearchRunner(BaseToolRunner):
     async def _search_domain(self, domain: str) -> tuple[dict, list[str], list[dict]]:
         # Run all domain tools in parallel including cert transparency + SSL
         (whois_res, harvester, dmitry, subfinder, dig_res, dnsrecon,
-         crt_sh, ssl_cert) = await asyncio.gather(
+         crt_sh, ssl_cert, dal) = await asyncio.gather(
             self._run_whois(domain),
             self._run_harvester(domain),
             self._run_dmitry(domain),
@@ -322,6 +326,7 @@ class DeepSearchRunner(BaseToolRunner):
             self._run_dnsrecon(domain),
             self._run_cert_transparency(domain),
             self._run_ssl_cert_info(domain),
+            self._run_digital_asset_links(domain),
         )
         locations = self._extract_locations_from_whois(whois_res, "whois")
         # Try to geolocate the domain's A record
@@ -338,9 +343,10 @@ class DeepSearchRunner(BaseToolRunner):
             "whois": whois_res, "harvester": harvester, "dmitry": dmitry,
             "subfinder": subfinder, "dig": dig_res, "dnsrecon": dnsrecon,
             "cert_transparency": crt_sh, "ssl_cert": ssl_cert,
+            "digital_asset_links": dal,
         }
         tools_run = ["whois", "harvester", "dmitry", "subfinder", "dig", "dnsrecon",
-                     "cert_transparency", "ssl_cert"]
+                     "cert_transparency", "ssl_cert", "digital_asset_links"]
         return results, tools_run, locations
 
     async def _search_name(self, name: str) -> tuple[dict, list[str], list[dict]]:
@@ -583,6 +589,22 @@ class DeepSearchRunner(BaseToolRunner):
             return await self._user_scanner.hudson_rock_lookup(target, is_email)
         except Exception as e:
             logger.warning(f"Hudson Rock lookup failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_google_email_check(self, email: str) -> dict:
+        """Check if email is registered on Google."""
+        try:
+            return await self._google_osint.check_google_email(email)
+        except Exception as e:
+            logger.warning(f"Google email check failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_digital_asset_links(self, domain: str) -> dict:
+        """Query Google Digital Asset Links for web/app associations."""
+        try:
+            return await self._google_osint.digital_asset_links(website=f"https://{domain}")
+        except Exception as e:
+            logger.warning(f"Digital Asset Links failed: {e}")
             return {"error": str(e)}
 
     async def _run_cert_transparency(self, domain: str) -> dict:
@@ -1436,6 +1458,10 @@ class DeepSearchRunner(BaseToolRunner):
                     highlights.append(f"cert: {cn}" + (f" by {issuer}" if issuer else ""))
                 if "san_count" in data and data["san_count"]:
                     highlights.append(f"{data['san_count']} SANs")
+                if "google_registered" in data:
+                    highlights.append(f"Google: {'registered' if data['google_registered'] else 'not registered'}")
+                if "links" in data and isinstance(data["links"], list) and data["links"]:
+                    highlights.append(f"{len(data['links'])} app/web links")
 
                 if highlights:
                     parts.append(f"  {tool}: {', '.join(highlights)}")

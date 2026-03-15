@@ -29,6 +29,7 @@ from runners.user_scanner import UserScannerRunner
 from runners.wireless_osint import WirelessOsintRunner
 from runners.ioc_extractor import IocExtractorRunner
 from runners.telegram_scraper import TelegramScraperRunner
+from runners.google_osint import GoogleOsintRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ user_scanner = UserScannerRunner()
 wireless_osint = WirelessOsintRunner()
 ioc_extractor = IocExtractorRunner()
 telegram_scraper = TelegramScraperRunner()
+google_osint = GoogleOsintRunner()
 
 
 @asynccontextmanager
@@ -422,6 +424,26 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- Google OSINT (no auth required) ---
+
+@app.get("/google/email-check/{email}")
+async def google_email_check(email: str):
+    """Check if an email is registered on Google."""
+    return await google_osint.check_google_email(email)
+
+
+@app.get("/google/bssid-geolocate/{bssid}")
+async def google_bssid_geolocate(bssid: str):
+    """Geolocate a WiFi access point by BSSID via Google Geolocation API."""
+    return await google_osint.geolocate_bssid(bssid)
+
+
+@app.get("/google/asset-links")
+async def google_asset_links(website: str = "", android_package: str = ""):
+    """Query Google Digital Asset Links for web/app associations."""
+    return await google_osint.digital_asset_links(website, android_package)
 
 
 # --- IOC Extraction + Certificate Transparency ---

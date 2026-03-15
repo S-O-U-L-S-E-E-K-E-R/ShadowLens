@@ -953,6 +953,157 @@ class FridayEngine:
                 answer = "No IOCs found in the provided text."
             return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"{result.get('total', 0)} IOCs extracted"}
 
+        # Quick email scan — fast checks only, offer deep search after
+        import re as _re
+        email_in_q = _re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', question)
+        if email_in_q and any(kw in q for kw in ['find ', 'search ', 'scan ', 'check ', 'lookup ', 'look up']):
+            email = email_in_q.group(0)
+            import urllib.request
+            parts = [f"**Quick Scan for `{email}`:**\n"]
+            tools_run = []
+
+            # Google check (fast — single HTTP request)
+            try:
+                resp = urllib.request.urlopen(
+                    f"http://localhost:8002/google/email-check/{email}", timeout=10)
+                gcheck = json.loads(resp.read())
+                reg = gcheck.get("google_registered", False)
+                parts.append(f"- Google: **{'Registered' if reg else 'Not registered'}**")
+                tools_run.append("google_check")
+            except Exception:
+                parts.append("- Google: check failed")
+
+            # Hudson Rock (fast — single HTTP request)
+            try:
+                payload = json.dumps({"target": email, "is_email": True}).encode()
+                req = urllib.request.Request(
+                    "http://localhost:8002/user-scanner/hudson-rock",
+                    data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                resp = urllib.request.urlopen(req, timeout=15)
+                hudson = json.loads(resp.read())
+                infections = hudson.get("infections_found", 0)
+                if infections:
+                    parts.append(f"- **INFOSTEALER: {infections} infection(s) detected!**")
+                    for s in hudson.get("stealers", [])[:3]:
+                        parts.append(f"  - {s.get('stealer_family', '?')} — {s.get('date_compromised', '?')[:10]} — {s.get('operating_system', '?')}")
+                else:
+                    parts.append("- Hudson Rock: No infostealer infections")
+                tools_run.append("hudson_rock")
+            except Exception:
+                parts.append("- Hudson Rock: check failed")
+
+            # HIBP breach check (fast — single HTTP request)
+            try:
+                req = urllib.request.Request(
+                    f"https://haveibeenpwned.com/api/v2/breachedaccount/{email}",
+                    headers={"User-Agent": "ShadowLens/1.0"})
+                resp = urllib.request.urlopen(req, timeout=10)
+                breaches = json.loads(resp.read())
+                if breaches:
+                    breach_names = [b.get("Name", "?") for b in breaches[:10]]
+                    parts.append(f"- HIBP: **{len(breaches)} breach(es)** — {', '.join(breach_names)}")
+                tools_run.append("hibp")
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    parts.append("- HIBP: No breaches found")
+                    tools_run.append("hibp")
+                elif e.code == 401:
+                    parts.append("- HIBP: API key required for full results")
+            except Exception:
+                pass
+
+            parts.append(f"\n*Quick scan complete ({len(tools_run)} checks). Say **\"deep scan {email}\"** for full 107-platform account discovery + credential analysis.*")
+            return {"answer": "\n".join(parts), "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"Quick scan: {email}"}
+
+        # Deep scan — full 107-platform scan (user explicitly asked for deep)
+        if any(kw in q for kw in ['deep scan', 'deep search', 'full scan']) and email_in_q:
+            email = email_in_q.group(0)
+            import urllib.request
+            try:
+                payload = json.dumps({"query": email}).encode()
+                req = urllib.request.Request(
+                    "http://localhost:8002/search",
+                    data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                resp = urllib.request.urlopen(req, timeout=300)
+                result = json.loads(resp.read())
+                summary = result.get("summary", "No results")
+                results_data = result.get("results", {})
+                parts = [f"**Deep OSINT Scan for `{email}`:**\n"]
+                uscan = results_data.get("user_scanner", {})
+                if uscan.get("total_found"):
+                    parts.append(f"- Accounts found: **{uscan['total_found']}** across {uscan.get('total_checked', '?')} platforms")
+                    for cat, items in uscan.get("by_category", {}).items():
+                        sites = ", ".join([i.get("site_name", "?") for i in items[:5]])
+                        parts.append(f"  - {cat}: {sites}")
+                hudson = results_data.get("hudson_rock", {})
+                if hudson.get("infections_found"):
+                    parts.append(f"- **INFOSTEALER: {hudson['infections_found']} infection(s)**")
+                holehe = results_data.get("holehe", {})
+                if holehe.get("registered_on"):
+                    parts.append(f"- holehe: {', '.join(holehe['registered_on'][:10])}")
+                gcheck = results_data.get("google_check", {})
+                if gcheck.get("google_registered") is not None:
+                    parts.append(f"- Google: {'Registered' if gcheck['google_registered'] else 'Not registered'}")
+                if len(parts) == 1:
+                    parts.append("- No significant findings")
+                parts.append(f"\n*{len(result.get('tools_run', []))} tools executed*")
+                return {"answer": "\n".join(parts), "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": summary, "locations": result.get("locations", [])}
+            except Exception as e:
+                return {"answer": f"Deep scan failed: {e}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": ""}
+
+        # Google email check
+        if any(kw in q for kw in ['is this email on google', 'google email check', 'gmail check', 'check google']):
+            import re
+            email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', question)
+            if email_match:
+                from runners.google_osint import GoogleOsintRunner
+                runner = GoogleOsintRunner()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(lambda: asyncio.run(runner.check_google_email(email_match.group(0)))).result()
+                registered = result.get("google_registered", False)
+                email = email_match.group(0)
+                answer = f"**Google Account Check for `{email}`:** {'Registered on Google' if registered else 'Not registered on Google'}"
+                return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"{email}: {'Google registered' if registered else 'not on Google'}"}
+
+        # BSSID geolocation
+        if any(kw in q for kw in ['geolocate bssid', 'bssid location', 'locate bssid', 'wifi mac', 'mac address location']):
+            import re
+            mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}', question)
+            if mac_match:
+                from runners.google_osint import GoogleOsintRunner
+                runner = GoogleOsintRunner()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(lambda: asyncio.run(runner.geolocate_bssid(mac_match.group(0)))).result()
+                if result.get("status") == "ok" and result.get("lat"):
+                    answer = f"**WiFi AP Geolocation for `{mac_match.group(0)}`:**\n\n- Latitude: {result['lat']}\n- Longitude: {result['lon']}\n- Accuracy: {result.get('accuracy_meters', '?')}m"
+                    locations = [{"lat": result["lat"], "lon": result["lon"], "label": f"WiFi AP {mac_match.group(0)}", "source": "google_geolocation"}]
+                    return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"BSSID located", "locations": locations}
+                else:
+                    answer = f"**BSSID `{mac_match.group(0)}`:** Not found in Google's geolocation database."
+                    return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": "BSSID not found"}
+
+        # Digital Asset Links
+        if any(kw in q for kw in ['asset links', 'linked apps', 'android app for', 'what apps', 'app association']):
+            domain = self._extract_domain_from_question(q)
+            if domain:
+                from runners.google_osint import GoogleOsintRunner
+                runner = GoogleOsintRunner()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(lambda: asyncio.run(runner.digital_asset_links(website=f"https://{domain}"))).result()
+                links = result.get("links", [])
+                if links:
+                    app_links = [l for l in links if l.get("type") == "android_app"]
+                    web_links = [l for l in links if l.get("type") == "website"]
+                    parts = []
+                    if app_links:
+                        parts.append(f"**Android Apps ({len(app_links)}):**\n" + "\n".join([f"- `{l.get('package', '?')}`" for l in app_links[:15]]))
+                    if web_links:
+                        parts.append(f"**Linked Websites ({len(web_links)}):**\n" + "\n".join([f"- {l.get('site', '?')}" for l in web_links[:10]]))
+                    answer = f"**Digital Asset Links for `{domain}`** — {len(links)} association(s):\n\n" + "\n\n".join(parts)
+                else:
+                    answer = f"No Digital Asset Links found for `{domain}`."
+                return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"{len(links)} asset links for {domain}"}
+
         return None
 
     def _extract_domain_from_question(self, question: str) -> str | None:
