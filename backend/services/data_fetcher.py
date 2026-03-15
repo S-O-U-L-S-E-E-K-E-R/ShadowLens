@@ -1397,10 +1397,13 @@ def fetch_weather():
 
 def fetch_cctv():
     try:
-        latest_data["cctv"] = get_all_cameras()
+        pipeline_cams = get_all_cameras()
     except Exception as e:
         logger.error(f"Error fetching cctv from DB: {e}")
-        latest_data["cctv"] = []
+        pipeline_cams = []
+    # Always merge Insecam public cameras
+    insecam = _get_insecam_cameras()
+    latest_data["cctv"] = pipeline_cams + insecam
 
 def fetch_tfrs():
     """FAA Temporary Flight Restrictions — reveals VIP movement, military ops, space launches."""
@@ -4524,6 +4527,69 @@ def update_liveuamap():
 # ---------------------------------------------------------------------------
 # OSINT Agent — host-side tool integration
 # ---------------------------------------------------------------------------
+_insecam_cache: list = []
+
+def _get_insecam_cameras() -> list:
+    """Load and cache the Insecam public camera database."""
+    global _insecam_cache
+    if _insecam_cache:
+        return _insecam_cache
+    try:
+        import json as _json
+        from pathlib import Path
+        cam_path = Path(__file__).parent.parent / "static" / "insecam_cameras.json"
+        if not cam_path.exists():
+            return []
+        with open(cam_path) as f:
+            data = _json.load(f)
+        features = data.get("features", [])
+        cameras = []
+        for feat in features:
+            props = feat.get("properties", {})
+            coords = feat.get("geometry", {}).get("coordinates", [0, 0])
+            stream_url = props.get("stream", "")
+            if not stream_url or len(coords) < 2:
+                continue
+            # Detect media type from URL
+            url_lower = stream_url.lower()
+            if any(d in url_lower for d in ["youtube", "youtu.be", "embed", "twitch", "vimeo", "dailymotion"]):
+                media_type = "embed"
+            elif "mjpg" in url_lower or "mjpeg" in url_lower:
+                media_type = "mjpeg"
+            elif ".m3u8" in url_lower or "hls" in url_lower:
+                media_type = "hls"
+            elif ".mp4" in url_lower or ".webm" in url_lower:
+                media_type = "video"
+            else:
+                media_type = "image"
+            cameras.append({
+                "id": f"insecam_{len(cameras)}",
+                "lat": coords[1],
+                "lon": coords[0],
+                "media_url": stream_url,
+                "media_type": media_type,
+                "direction_facing": props.get("city", "") or props.get("region", ""),
+                "source_agency": "Insecam",
+                "country": props.get("country", ""),
+                "city": props.get("city", ""),
+                "region": props.get("region", ""),
+            })
+        # Deduplicate by coordinates — keep first camera per location
+        seen_coords = set()
+        unique = []
+        for cam in cameras:
+            key = f"{cam['lat']:.4f},{cam['lon']:.4f}"
+            if key not in seen_coords:
+                seen_coords.add(key)
+                unique.append(cam)
+        _insecam_cache = unique
+        logger.info(f"Insecam: cached {len(unique)} unique public cameras (from {len(cameras)} total)")
+        return unique
+    except Exception as e:
+        logger.warning(f"Failed to load Insecam cameras: {e}")
+        return []
+
+
 def fetch_osint_kismet():
     """Fetch WiFi/BT devices from Kismet via OSINT agent."""
     try:

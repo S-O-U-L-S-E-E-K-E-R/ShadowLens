@@ -3755,7 +3755,7 @@ const MaplibreViewer = ({ data, activeLayers, onEntityClick, flyToLocation, sele
 
                 {/* CCTV Cameras — clustered green dots */}
                 {cctvGeoJSON && (
-                    <Source id="cctv" type="geojson" data={cctvGeoJSON as any} cluster={true} clusterRadius={50} clusterMaxZoom={14}>
+                    <Source id="cctv" type="geojson" data={cctvGeoJSON as any} cluster={true} clusterRadius={50} clusterMaxZoom={14} clusterMinPoints={2}>
                         {/* Cluster circles — green, sized by count */}
                         <Layer
                             id="cctv-clusters"

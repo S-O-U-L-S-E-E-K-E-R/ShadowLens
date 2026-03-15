@@ -621,6 +621,122 @@ async def api_ollama_models():
 
 
 # ---------------------------------------------------------------------------
+# GeoJSON Import — normalize arbitrary JSON/GeoJSON for map overlay
+# ---------------------------------------------------------------------------
+
+class GeoJsonImportBody(BaseModel):
+    data: str  # Raw JSON string (GeoJSON, array of objects, or single feature)
+    lat_field: str = ""  # Optional manual lat field override
+    lon_field: str = ""  # Optional manual lon field override
+
+
+@app.post("/api/geojson/import")
+async def api_geojson_import(body: GeoJsonImportBody):
+    """Import arbitrary JSON/GeoJSON data and normalize it for map display.
+
+    Accepts:
+      - GeoJSON FeatureCollection, Feature, or bare Geometry
+      - Array of objects with auto-detected lat/lon fields
+      - CSV-like JSON arrays
+
+    Returns a normalized GeoJSON FeatureCollection.
+    """
+    import json as _json
+
+    LAT_PATTERNS = ["latitude", "lat", "loclat", "coord_lat", "geo_lat",
+                    "location_lat", "point_lat", "pos_lat", "y"]
+    LON_PATTERNS = ["longitude", "lng", "lon", "long", "loclon", "coord_lon",
+                    "coord_lng", "geo_lon", "geo_lng", "location_lon",
+                    "location_lng", "point_lon", "pos_lon", "x"]
+
+    def detect_field(keys, patterns, sample):
+        for pattern in patterns:
+            for key in keys:
+                if key.lower() == pattern:
+                    val = sample.get(key)
+                    try:
+                        float(val)
+                        return key
+                    except (TypeError, ValueError):
+                        pass
+        for pattern in patterns:
+            for key in keys:
+                if pattern in key.lower():
+                    val = sample.get(key)
+                    try:
+                        float(val)
+                        return key
+                    except (TypeError, ValueError):
+                        pass
+        return None
+
+    try:
+        parsed = _json.loads(body.data)
+    except _json.JSONDecodeError as e:
+        return {"status": "error", "error": f"Invalid JSON: {e}"}
+
+    features = []
+    skipped = 0
+
+    # Already a FeatureCollection
+    if isinstance(parsed, dict) and parsed.get("type") == "FeatureCollection":
+        for feat in parsed.get("features", []):
+            geom = feat.get("geometry", {})
+            coords = geom.get("coordinates", [])
+            if geom.get("type") == "Point" and len(coords) >= 2:
+                features.append(feat)
+            else:
+                skipped += 1
+
+    # Single Feature
+    elif isinstance(parsed, dict) and parsed.get("type") == "Feature":
+        features.append(parsed)
+
+    # Array of objects — auto-detect lat/lon
+    elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+        sample = parsed[0]
+        keys = list(sample.keys())
+        lat_field = body.lat_field or detect_field(keys, LAT_PATTERNS, sample)
+        lon_field = body.lon_field or detect_field(keys, LON_PATTERNS, sample)
+
+        if not lat_field or not lon_field:
+            return {"status": "error", "error": f"Could not detect lat/lon fields from keys: {keys[:20]}. Pass lat_field and lon_field manually."}
+
+        for row in parsed:
+            try:
+                lat = float(row[lat_field])
+                lon = float(row[lon_field])
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    props = {k: v for k, v in row.items() if k not in (lat_field, lon_field)}
+                    features.append({
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                        "properties": props,
+                    })
+                else:
+                    skipped += 1
+            except (KeyError, TypeError, ValueError):
+                skipped += 1
+    else:
+        return {"status": "error", "error": "Unrecognized format. Expected GeoJSON or an array of objects with lat/lon fields."}
+
+    if not features:
+        return {"status": "error", "error": "No valid features found."}
+
+    # Assign IDs
+    for i, f in enumerate(features):
+        if "id" not in f:
+            f["id"] = f"import-{i}"
+
+    return {
+        "status": "ok",
+        "total": len(features),
+        "skipped": skipped,
+        "geojson": {"type": "FeatureCollection", "features": features},
+    }
+
+
+# ---------------------------------------------------------------------------
 # IOC Extraction + Certificate Transparency
 # ---------------------------------------------------------------------------
 
