@@ -27,6 +27,7 @@ from runners.autorecon import AutoReconRunner
 from runners.base import get_job, list_jobs
 from runners.user_scanner import UserScannerRunner
 from runners.wireless_osint import WirelessOsintRunner
+from runners.ioc_extractor import IocExtractorRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ deep_search = DeepSearchRunner()
 autorecon = AutoReconRunner()
 user_scanner = UserScannerRunner()
 wireless_osint = WirelessOsintRunner()
+ioc_extractor = IocExtractorRunner()
 
 
 @asynccontextmanager
@@ -418,6 +420,30 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- IOC Extraction + Certificate Transparency ---
+
+class IocExtractRequest(BaseModel):
+    text: str
+
+
+@app.post("/ioc/extract")
+async def ioc_extract(req: IocExtractRequest):
+    """Extract IOCs (IPs, domains, emails, URLs, hashes, CVEs) from text."""
+    return await ioc_extractor.extract_from_text(req.text)
+
+
+@app.get("/cert/transparency/{domain}")
+async def cert_transparency(domain: str):
+    """Query crt.sh for subdomains via certificate transparency logs."""
+    return await ioc_extractor.cert_transparency(domain)
+
+
+@app.get("/cert/info/{domain}")
+async def cert_info(domain: str):
+    """Retrieve SSL certificate details from a domain."""
+    return await ioc_extractor.ssl_cert_info(domain)
 
 
 # --- Wireless OSINT (Wigle WiFi/BT + wpa-sec credential leaks) ---

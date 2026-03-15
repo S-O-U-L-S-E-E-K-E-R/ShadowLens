@@ -46,6 +46,9 @@ OSINT_KEYWORDS = [
     'what sites', 'what platforms', 'where is registered',
     'hudson rock', 'infostealer', 'breach check', 'credential leak',
     'compromised credentials', 'what accounts',
+    'certificate transparency', 'cert transparency', 'crt.sh', 'ssl cert',
+    'extract ioc', 'find ioc', 'indicators of compromise',
+    'subdomains for', 'find subdomains',
 ]
 
 # Location/mapping keywords — questions that need geocoding + map plotting
@@ -577,11 +580,16 @@ class FridayEngine:
         needs_wireless = self._needs_wireless(question)
         hist = history or []
 
-        # Route 0a: Wireless device discovery — Wigle WiFi/BT search
+        # Route 0a: Fast-path for cert/subdomain/IOC queries (no LLM needed)
+        fast_result = self._try_fast_osint(question)
+        if fast_result:
+            return fast_result
+
+        # Route 0b: Wireless device discovery — Wigle WiFi/BT search
         if needs_wireless:
             return self._handle_wireless_query(question, context, hist)
 
-        # Route 0b: Camera/webcam discovery — find live feeds near a location
+        # Route 0c: Camera/webcam discovery — find live feeds near a location
         if needs_camera:
             return self._handle_camera_query(question, context, hist)
 
@@ -874,6 +882,91 @@ class FridayEngine:
                         break
 
         return locations[:20]  # Cap at 20 to avoid huge payloads
+
+    def _try_fast_osint(self, question: str) -> dict | None:
+        """Fast-path for queries that can be answered without the LLM.
+
+        Handles: subdomain discovery, cert info, IOC extraction.
+        Returns None if the query doesn't match a fast-path.
+        """
+        import concurrent.futures
+        import asyncio
+        from runners.ioc_extractor import IocExtractorRunner
+
+        q = question.lower()
+        runner = IocExtractorRunner()
+
+        # Subdomain / cert transparency queries
+        if any(kw in q for kw in ['subdomain', 'crt.sh', 'cert transparency', 'certificate transparency']):
+            # Extract domain from question
+            domain = self._extract_domain_from_question(q)
+            if domain:
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(lambda: asyncio.run(runner.cert_transparency(domain))).result()
+                subs = result.get("subdomains", [])
+                if subs:
+                    sub_list = "\n".join([f"- `{s}`" for s in subs])
+                    answer = f"Found **{len(subs)} subdomain(s)** for `{domain}` via certificate transparency (crt.sh):\n\n{sub_list}"
+                else:
+                    answer = f"No subdomains found for `{domain}` via crt.sh."
+                return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"{len(subs)} subdomains for {domain}"}
+
+        # SSL cert info queries
+        if any(kw in q for kw in ['ssl cert', 'certificate info', 'cert info', 'tls cert']):
+            domain = self._extract_domain_from_question(q)
+            if domain:
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(lambda: asyncio.run(runner.ssl_cert_info(domain))).result()
+                if result.get("status") == "ok":
+                    sans = result.get("sans", [])
+                    answer = (
+                        f"**SSL Certificate for `{domain}`**\n\n"
+                        f"| Field | Value |\n|---|---|\n"
+                        f"| Subject | {result.get('subject_cn', 'N/A')} |\n"
+                        f"| Issuer | {result.get('issuer_cn', '')} ({result.get('issuer_org', '')}) |\n"
+                        f"| Valid From | {result.get('not_before', 'N/A')} |\n"
+                        f"| Valid Until | {result.get('not_after', 'N/A')} |\n"
+                        f"| Serial | {result.get('serial_number', 'N/A')} |\n"
+                        f"| SANs | {len(sans)} entries |\n"
+                    )
+                    if sans:
+                        answer += f"\n**Subject Alternative Names:**\n" + "\n".join([f"- `{s}`" for s in sans[:20]])
+                else:
+                    answer = f"Could not retrieve SSL certificate for `{domain}`: {result.get('error', 'unknown error')}"
+                return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"SSL cert for {domain}"}
+
+        # IOC extraction from pasted text
+        if any(kw in q for kw in ['extract ioc', 'find ioc', 'indicators of compromise', 'parse ioc']):
+            # The IOC text is the question itself (user pastes text)
+            from runners.ioc_extractor import extract_iocs
+            result = extract_iocs(question)
+            if result.get("total", 0) > 0:
+                parts = []
+                for key, label in [("ips", "IPs"), ("domains", "Domains"), ("emails", "Emails"),
+                                    ("urls", "URLs"), ("hashes", "Hashes"), ("cves", "CVEs")]:
+                    items = result.get(key, [])
+                    if items:
+                        parts.append(f"**{label} ({len(items)}):**\n" + "\n".join([f"- `{i}`" for i in items[:15]]))
+                answer = f"Extracted **{result['total']} IOC(s)**:\n\n" + "\n\n".join(parts)
+            else:
+                answer = "No IOCs found in the provided text."
+            return {"answer": answer, "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"{result.get('total', 0)} IOCs extracted"}
+
+        return None
+
+    def _extract_domain_from_question(self, question: str) -> str | None:
+        """Extract a domain name from a natural language question."""
+        import re
+        # Try to find a domain pattern in the question
+        domain_re = re.compile(r'\b([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,})\b')
+        for m in domain_re.finditer(question):
+            d = m.group(1).lower()
+            # Skip common words that look like domains
+            if d in ('crt.sh', 'wpa-sec.stanev.org'):
+                continue
+            if '.' in d and len(d) > 4:
+                return d
+        return None
 
     def _handle_wireless_query(self, question: str, context: str, history: list = None) -> dict:
         """Handle wireless device discovery — Wigle WiFi/Bluetooth search."""

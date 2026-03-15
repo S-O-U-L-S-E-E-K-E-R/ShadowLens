@@ -621,6 +621,38 @@ async def api_ollama_models():
 
 
 # ---------------------------------------------------------------------------
+# IOC Extraction + Certificate Transparency
+# ---------------------------------------------------------------------------
+
+class IocExtractBody(BaseModel):
+    text: str
+
+
+@app.post("/api/osint/ioc-extract")
+async def api_ioc_extract(body: IocExtractBody):
+    """Extract IOCs (IPs, domains, emails, URLs, hashes) from text."""
+    import asyncio
+    from services.osint_bridge import ioc_extract
+    return await asyncio.to_thread(ioc_extract, body.text)
+
+
+@app.get("/api/osint/cert-transparency/{domain}")
+async def api_cert_transparency(domain: str):
+    """Query crt.sh for subdomains via certificate transparency."""
+    import asyncio
+    from services.osint_bridge import cert_transparency
+    return await asyncio.to_thread(cert_transparency, domain)
+
+
+@app.get("/api/osint/ssl-cert/{domain}")
+async def api_ssl_cert(domain: str):
+    """Get SSL certificate details for a domain."""
+    import asyncio
+    from services.osint_bridge import ssl_cert_info
+    return await asyncio.to_thread(ssl_cert_info, domain)
+
+
+# ---------------------------------------------------------------------------
 # Wireless OSINT — Wigle WiFi/Bluetooth + wpa-sec credential leaks
 # ---------------------------------------------------------------------------
 

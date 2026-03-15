@@ -104,6 +104,21 @@ def wireless_bssid_search(bssid: str) -> dict:
     return _get(f"/wireless/bssid/{bssid}")
 
 
+def ioc_extract(text: str) -> dict:
+    """Extract IOCs from text via OSINT agent."""
+    return _post("/ioc/extract", {"text": text})
+
+
+def cert_transparency(domain: str) -> dict:
+    """Query crt.sh for subdomains."""
+    return _get(f"/cert/transparency/{domain}")
+
+
+def ssl_cert_info(domain: str) -> dict:
+    """Get SSL certificate details."""
+    return _get(f"/cert/info/{domain}")
+
+
 USER_SCANNER_TIMEOUT = 120  # email scans across 107 platforms can take time
 
 

@@ -21,6 +21,7 @@ from runners.harvester import HarvesterRunner
 from runners.spiderfoot import SpiderFootRunner
 from runners.person_search import PersonSearchRunner
 from runners.user_scanner import UserScannerRunner
+from runners.ioc_extractor import IocExtractorRunner
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ class DeepSearchRunner(BaseToolRunner):
         self._spiderfoot = SpiderFootRunner()
         self._person_search = PersonSearchRunner()
         self._user_scanner = UserScannerRunner()
+        self._ioc_extractor = IocExtractorRunner()
 
     # ------------------------------------------------------------------
     # Public API
@@ -309,16 +311,17 @@ class DeepSearchRunner(BaseToolRunner):
         return results, tools_run, locations
 
     async def _search_domain(self, domain: str) -> tuple[dict, list[str], list[dict]]:
-        # Run whois + harvester + dmitry + subfinder + dig + dnsrecon in parallel
-        whois_task = self._run_whois(domain)
-        harvester_task = self._run_harvester(domain)
-        dmitry_task = self._run_dmitry(domain)
-        subfinder_task = self._run_subfinder(domain)
-        dig_task = self._run_dig(domain)
-        dnsrecon_task = self._run_dnsrecon(domain)
-        whois_res, harvester, dmitry, subfinder, dig_res, dnsrecon = await asyncio.gather(
-            whois_task, harvester_task, dmitry_task,
-            subfinder_task, dig_task, dnsrecon_task,
+        # Run all domain tools in parallel including cert transparency + SSL
+        (whois_res, harvester, dmitry, subfinder, dig_res, dnsrecon,
+         crt_sh, ssl_cert) = await asyncio.gather(
+            self._run_whois(domain),
+            self._run_harvester(domain),
+            self._run_dmitry(domain),
+            self._run_subfinder(domain),
+            self._run_dig(domain),
+            self._run_dnsrecon(domain),
+            self._run_cert_transparency(domain),
+            self._run_ssl_cert_info(domain),
         )
         locations = self._extract_locations_from_whois(whois_res, "whois")
         # Try to geolocate the domain's A record
@@ -334,8 +337,10 @@ class DeepSearchRunner(BaseToolRunner):
         results = {
             "whois": whois_res, "harvester": harvester, "dmitry": dmitry,
             "subfinder": subfinder, "dig": dig_res, "dnsrecon": dnsrecon,
+            "cert_transparency": crt_sh, "ssl_cert": ssl_cert,
         }
-        tools_run = ["whois", "harvester", "dmitry", "subfinder", "dig", "dnsrecon"]
+        tools_run = ["whois", "harvester", "dmitry", "subfinder", "dig", "dnsrecon",
+                     "cert_transparency", "ssl_cert"]
         return results, tools_run, locations
 
     async def _search_name(self, name: str) -> tuple[dict, list[str], list[dict]]:
@@ -578,6 +583,22 @@ class DeepSearchRunner(BaseToolRunner):
             return await self._user_scanner.hudson_rock_lookup(target, is_email)
         except Exception as e:
             logger.warning(f"Hudson Rock lookup failed: {e}")
+            return {"error": str(e)}
+
+    async def _run_cert_transparency(self, domain: str) -> dict:
+        """Query crt.sh for subdomains via certificate transparency."""
+        try:
+            return await self._ioc_extractor.cert_transparency(domain)
+        except Exception as e:
+            logger.warning(f"cert transparency failed: {e}")
+            return {"error": str(e), "subdomains": []}
+
+    async def _run_ssl_cert_info(self, domain: str) -> dict:
+        """Retrieve SSL certificate details from a domain."""
+        try:
+            return await self._ioc_extractor.ssl_cert_info(domain)
+        except Exception as e:
+            logger.warning(f"SSL cert info failed: {e}")
             return {"error": str(e)}
 
     async def _run_whois(self, target: str) -> dict:
@@ -1407,6 +1428,14 @@ class DeepSearchRunner(BaseToolRunner):
                 if "infections_found" in data:
                     count = data["infections_found"]
                     highlights.append(f"{count} infostealer infection{'s' if count != 1 else ''}")
+                if "subdomains" in data and isinstance(data["subdomains"], list) and data["subdomains"]:
+                    highlights.append(f"{len(data['subdomains'])} subdomains (crt.sh)")
+                if "subject_cn" in data:
+                    cn = data.get("subject_cn", "")
+                    issuer = data.get("issuer_org", "")
+                    highlights.append(f"cert: {cn}" + (f" by {issuer}" if issuer else ""))
+                if "san_count" in data and data["san_count"]:
+                    highlights.append(f"{data['san_count']} SANs")
 
                 if highlights:
                     parts.append(f"  {tool}: {', '.join(highlights)}")
