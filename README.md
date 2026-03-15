@@ -31,13 +31,27 @@ ShadowLens includes **F.R.I.D.A.Y.**, an AI analysis engine with a **switchable 
 
 To use Ollama: install it (`curl -fsSL https://ollama.com/install.sh | sh`), pull a model (`ollama pull llama3`), then switch from the Settings panel. The model dropdown auto-populates from your Ollama instance.
 
-### OSINT Agent — 18+ Security Tools
+### OSINT Agent — 30+ Security Tools & Intelligence Sources
 
 The integrated OSINT agent (port 8002) provides one-click access to:
 
-`nmap` · `nuclei` · `whatweb` · `theHarvester` · `spiderfoot` · `sherlock` · `h8mail` · `whois` · `dmitry` · `subfinder` · `dnsrecon` · `shodan` · `phoneinfoga` · `maigret` · `holehe` · `autorecon` · `kismet` · `snort`
+**Network & Vulnerability:** `nmap` · `nuclei` · `whatweb` · `autorecon` · `spiderfoot`
 
-Deep OSINT search auto-detects input type (IP, domain, email, phone, username, hash) and runs the appropriate tool combination.
+**Domain & DNS:** `whois` · `dmitry` · `subfinder` · `dnsrecon` · `crt.sh` (cert transparency) · `SSL cert analysis` · `Digital Asset Links`
+
+**Person & Identity:** `sherlock` · `maigret` · `holehe` · `user-scanner` (107 email + 91 username platforms) · `Hudson Rock` (infostealer intelligence) · `Google email check`
+
+**Breach & Credentials:** `h8mail` · `HIBP` · `Hudson Rock` · `wpa-sec` (WiFi credential leaks)
+
+**Wireless & SIGINT:** `kismet` · `snort` · `Wigle` (WiFi/BT wardriving) · `Google BSSID geolocation`
+
+**Social Media:** `Telegram` (public channel scraping + regional search) · `Reddit` · `Bluesky` · `Mastodon` · `YouTube` · `Flickr`
+
+**Cameras & Feeds:** `Windy Webcams` · `Insecam` (1,692 public cameras) · `21 CCTV pipeline ingestors`
+
+**Analysis:** `IOC extraction` (IPs, domains, emails, hashes, CVEs) · `GeoJSON import`
+
+Deep OSINT search auto-detects input type (IP, domain, email, phone, username, hash) and runs the appropriate tool combination. Quick email scans return results in under 1 second with an option for deep 107-platform analysis.
 
 ---
 
@@ -199,7 +213,7 @@ All layers are independently toggleable from the left panel:
 
 | Layer | Source | Update | Key Required |
 |---|---|---|---|
-| CCTV Mesh | 21 ingestors (see below) | ~60s | Mixed |
+| CCTV Mesh | 21 ingestors + Insecam (1,692 global) + Windy Webcams | ~60s | Mixed |
 | Military Bases | Hardcoded DB (200+ US/NATO) | Startup | No |
 | Nuclear Facilities | IAEA GIS (200+ reactors) | Startup | No |
 | Submarine Cables | TeleGeography | Startup | No |
@@ -223,7 +237,7 @@ All layers are independently toggleable from the left panel:
 
 | Layer | Source | Update | Key Required |
 |---|---|---|---|
-| WiFi/BT Devices | Kismet | ~15min | Optional |
+| WiFi/BT Devices | Kismet + Wigle (on regional pin) | ~15min / on-demand | Optional |
 | IDS Alerts | Snort | ~15min | No |
 | Network Hosts | Nmap | ~15min | No |
 | Vulnerabilities | Nuclei | ~15min | No |
@@ -236,7 +250,7 @@ Transport for London JamCams, Singapore LTA, Austin TX TxDOT, NYC DOT, Tennessee
 
 * **Region Dossier** — Right-click anywhere for country profile (population, capital, languages, currencies, leader, government type), local Wikipedia summary
 * **News Feed** — 60+ RSS sources (Reuters, AP, BBC, Al Jazeera, NYT, defense/security outlets, regional conflict sources, cyber security feeds)
-* **Regional Feed** — Location-aware news from Google, Bing, DuckDuckGo, GDELT, Reddit, Bluesky, Mastodon (via SSE streaming)
+* **Regional Feed** — Location-aware news from Google, Bing, DuckDuckGo, GDELT, Reddit, Bluesky, Mastodon, Telegram OSINT channels (via SSE streaming)
 * **Radio Scanner** — Broadcastify top feeds + OpenMHz scanner systems with nearest-system lookup
 * **Global Markets Ticker** — Defense sector stocks (RTX, LMT, NOC, BA) and oil prices (WTI, Brent) via yfinance
 * **Flight Route Lookup** — Origin/destination for any tracked flight
@@ -245,6 +259,14 @@ Transport for London JamCams, Singapore LTA, Austin TX TxDOT, NYC DOT, Tennessee
 * **API Key Management** — In-app settings panel for configuring all API keys
 * **LLM Provider Switch** — Toggle between Claude Code CLI and Ollama (local LLM) from Settings
 * **AI Track Analysis** — `/api/analyze/{type}/{id}` provides LLM-powered threat assessment for any entity (supports Claude API, Ollama, and rule-based fallback)
+* **Webcam Discovery** — Search for live public webcams near any location via Windy Webcams API
+* **Wireless OSINT** — WiFi/Bluetooth device discovery via Wigle wardriving database + wpa-sec credential leak detection (populates on regional pin drop)
+* **Telegram Intelligence** — Scrape public Telegram channels + search OSINT channels by region
+* **Email Quick Scan** — Instant Google check + Hudson Rock infostealer + HIBP breach lookup in <1 second, with option for deep 107-platform scan
+* **IOC Extraction** — Extract IPs, domains, emails, URLs, hashes, CVEs from any text
+* **Certificate Transparency** — Subdomain discovery via crt.sh (instant, no LLM)
+* **GeoJSON Import** — Upload arbitrary JSON/GeoJSON data as custom map overlay
+* **Insecam Database** — 1,692 public cameras worldwide integrated into CCTV mesh
 
 ---
 
@@ -266,10 +288,10 @@ ShadowLens/
 |   |-- CCTV pipeline (21 ingestors)
 |   |-- Region dossier (Nominatim + RestCountries + Wikidata + Wikipedia)
 |   |-- Satellite pass predictor (SGP4)
-|   |-- Regional news aggregator (Google/Bing/Reddit/Bluesky/Mastodon)
+|   |-- Regional news aggregator (Google/Bing/Reddit/Bluesky/Mastodon/Telegram)
 |
 |-- OSINT Agent (FastAPI, port 8002) --- Host process (not Docker)
-|   |-- 18+ security tool runners
+|   |-- 30+ security tool runners
 |   |-- F.R.I.D.A.Y. engine (FAISS RAG + LLM)
 |   |-- LLM provider manager (Claude Code CLI / Ollama switch)
 |   |-- Deep search (auto-detection pipeline)
@@ -333,7 +355,12 @@ ShadowLens/
 |   |   |-- whatweb.py             # Web technology fingerprinting
 |   |   |-- deep_search.py         # Multi-tool OSINT (auto-detects input type)
 |   |   |-- person_search.py       # People lookup
-|   |   +-- autorecon.py           # Full reconnaissance framework
+|   |   |-- autorecon.py           # Full reconnaissance framework
+|   |   |-- user_scanner.py        # Email/username scan (200 platforms) + Hudson Rock
+|   |   |-- wireless_osint.py      # Wigle WiFi/BT + wpa-sec credential leaks
+|   |   |-- telegram_scraper.py    # Telegram public channel scraper
+|   |   |-- ioc_extractor.py       # IOC extraction + cert transparency + SSL certs
+|   |   +-- google_osint.py        # Google email check + BSSID geolocation + DAL
 |   +-- syd/                        # F.R.I.D.A.Y. engine
 |       |-- engine.py               # Core RAG pipeline (Claude Code + Ollama dual backend)
 |       |-- nmap_fact_extractor.py  # Nmap scan parser
@@ -379,6 +406,9 @@ ABUSEIPDB_API_KEY=              # IP reputation
 IPINFO_API_KEY=                 # IP geolocation
 NUMVERIFY_API_KEY=              # Phone number lookup
 KISMET_API_KEY=                 # Wireless IDS auth
+WIGLE_API_NAME=                 # WiFi/BT device discovery (wigle.net)
+WIGLE_API_TOKEN=                # Paired with Wigle API Name
+WINDY_WEBCAMS_API_KEY=          # Live webcam discovery (api.windy.com)
 # See .env.example for the full list
 ```
 
@@ -405,6 +435,16 @@ KISMET_API_KEY=                 # Wireless IDS auth
 | `GET /api/llm/status` | Current LLM provider, backend availability |
 | `PUT /api/llm/provider` | Switch between Claude Code and Ollama |
 | `GET /api/ollama/models` | List available Ollama models |
+| `POST /api/osint/email-scan` | Scan email across 107 platforms for registrations |
+| `POST /api/osint/username-scan` | Scan username across 91 platforms for accounts |
+| `POST /api/osint/hudson-rock` | Query Hudson Rock infostealer intelligence |
+| `POST /api/osint/ioc-extract` | Extract IOCs from text (IPs, domains, hashes, CVEs) |
+| `GET /api/osint/cert-transparency/{domain}` | Subdomain discovery via crt.sh |
+| `GET /api/osint/ssl-cert/{domain}` | SSL certificate details |
+| `GET /api/telegram/channel/{name}` | Scrape public Telegram channel |
+| `POST /api/telegram/search` | Search OSINT Telegram channels by keyword |
+| `GET /api/wireless/nearby` | WiFi/BT device discovery via Wigle |
+| `POST /api/geojson/import` | Import arbitrary JSON/GeoJSON as map overlay |
 | `GET /api/settings/api-keys` | View configured API keys (obfuscated) |
 | `PUT /api/settings/api-keys` | Update an API key |
 | `GET /api/health` | Uptime, last update times, source counts |

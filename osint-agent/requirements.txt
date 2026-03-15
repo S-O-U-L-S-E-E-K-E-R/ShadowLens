@@ -2,6 +2,8 @@ fastapi>=0.104.0
 uvicorn>=0.24.0
 httpx>=0.25.0
 python-nmap>=0.7.1
+beautifulsoup4>=4.12.0
+colorama>=0.4.6
 # F.R.I.D.A.Y. engine dependencies
 # LLM inference is handled externally by Claude Code CLI or Ollama (no local model loading)
 sentence-transformers>=2.2.0
