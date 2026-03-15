@@ -119,6 +119,29 @@ def ssl_cert_info(domain: str) -> dict:
     return _get(f"/cert/info/{domain}")
 
 
+TELEGRAM_TIMEOUT = 30
+
+
+def telegram_channel(channel: str, limit: int = 20) -> dict:
+    """Scrape a public Telegram channel."""
+    try:
+        resp = requests.get(
+            f"{OSINT_AGENT_URL}/telegram/channel/{channel}",
+            params={"limit": limit},
+            timeout=(CONNECT_TIMEOUT, TELEGRAM_TIMEOUT),
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        logger.warning(f"Telegram scrape error: {e}")
+    return {"status": "error", "posts": []}
+
+
+def telegram_search(query: str, channels: list = None, limit: int = 15) -> dict:
+    """Search OSINT Telegram channels for keyword mentions."""
+    return _post("/telegram/search", {"query": query, "channels": channels or [], "limit": limit}, read_timeout=TELEGRAM_TIMEOUT)
+
+
 USER_SCANNER_TIMEOUT = 120  # email scans across 107 platforms can take time
 
 

@@ -92,6 +92,7 @@ def fetch_regional_feeds_streaming(lat: float, lng: float, region_name: str, cou
             pool.submit(_search_mastodon, search_terms): ('mastodon', 'social'),
             pool.submit(_search_duckduckgo_news, news_queries, lat, lng): ('ddg_news', 'news'),
             pool.submit(_search_rss_regional, region_name, country_code, lat, lng): ('rss', 'news'),
+            pool.submit(_search_telegram, search_terms): ('telegram', 'social'),
         }
 
         for future in concurrent.futures.as_completed(futures, timeout=45):
@@ -148,13 +149,14 @@ def fetch_regional_feeds(lat: float, lng: float, region_name: str, country_code:
             pool.submit(_search_mastodon, search_terms): 'mastodon',
             pool.submit(_search_duckduckgo_news, news_queries, lat, lng): 'ddg_news',
             pool.submit(_search_rss_regional, region_name, country_code, lat, lng): 'rss',
+            pool.submit(_search_telegram, search_terms): 'telegram',
         }
 
         for future in concurrent.futures.as_completed(futures, timeout=45):
             source = futures[future]
             try:
                 result = future.result(timeout=20)
-                if source in ('reddit', 'bluesky', 'mastodon'):
+                if source in ('reddit', 'bluesky', 'mastodon', 'telegram'):
                     social.extend(result)
                 else:
                     news.extend(result)
@@ -701,3 +703,38 @@ def _search_mastodon(terms: list[str]) -> list:
             except Exception:
                 continue
     return posts
+
+
+def _search_telegram(terms: list[str]) -> list:
+    """Search OSINT Telegram channels for posts about the region."""
+    try:
+        from services.osint_bridge import telegram_search
+        query = " ".join(terms[:2])
+        result = telegram_search(query)
+        if not isinstance(result, dict) or result.get("status") != "ok":
+            return []
+        posts = []
+        for p in result.get("posts", []):
+            content = p.get("content", "")
+            if not content or len(content) < 20:
+                continue
+            posts.append({
+                "id": f"tg-reg-{p.get('url', '').split('/')[-1]}",
+                "platform": "telegram",
+                "subreddit": p.get("channel", ""),
+                "title": content[:200],
+                "author": p.get("channel", ""),
+                "url": p.get("url", ""),
+                "media_url": "",
+                "media_type": "",
+                "score": 0,
+                "comments": 0,
+                "created": p.get("date", ""),
+                "flair": "telegram",
+                "nsfw": False,
+                "regional": True,
+            })
+        return posts
+    except Exception as e:
+        logger.debug(f"Telegram regional search failed: {e}")
+        return []

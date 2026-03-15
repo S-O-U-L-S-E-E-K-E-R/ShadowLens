@@ -3200,6 +3200,38 @@ def fetch_social_media_osint():
             except Exception:
                 pass
 
+        # Telegram — scrape top OSINT channels for latest posts
+        try:
+            from services.osint_bridge import telegram_channel
+            tg_channels = ["IntelSlava", "GeromanAT", "WarMonitor3", "TheIntelArena"]
+            for ch in tg_channels:
+                try:
+                    result = telegram_channel(ch, limit=5)
+                    if isinstance(result, dict) and result.get("status") == "ok":
+                        for p in result.get("posts", []):
+                            content = p.get("content", "")
+                            if not content or len(content) < 20:
+                                continue
+                            posts.append({
+                                "id": f"tg-{ch}-{p.get('url', '').split('/')[-1]}",
+                                "platform": "telegram",
+                                "subreddit": ch,
+                                "title": content[:300],
+                                "author": ch,
+                                "url": p.get("url", ""),
+                                "media_url": "",
+                                "media_type": "",
+                                "score": 0,
+                                "comments": 0,
+                                "created": p.get("date", ""),
+                                "flair": "telegram",
+                                "nsfw": False,
+                            })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         latest_data["social_media"] = posts
         logger.info(f"Social media OSINT: {len(posts)} posts from {len(set(p['platform'] for p in posts))} platforms")
     except Exception as e:

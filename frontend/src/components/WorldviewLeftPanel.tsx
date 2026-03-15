@@ -74,7 +74,7 @@ const WorldviewLeftPanel = React.memo(function WorldviewLeftPanel({ data, active
         { id: "reservoirs", name: "Reservoirs / Dams", source: "USGS Water", count: data?.reservoirs?.length || 0, icon: Waves },
         { id: "cell_towers", name: "Cell Towers", source: "OpenCelliD", count: data?.cell_towers?.length || 0, icon: Signal },
         { id: "global_events", name: "Global Events", source: "GDACS+ReliefWeb+WHO+FEMA", count: data?.global_events?.length || 0, icon: Siren },
-        { id: "social_media", name: "Social Media OSINT", source: "Reddit+Mastodon+YouTube+Flickr", count: data?.social_media?.length || 0, icon: MessageSquare },
+        { id: "social_media", name: "Social Media OSINT", source: "Reddit+Telegram+Mastodon+YouTube+Flickr", count: data?.social_media?.length || 0, icon: MessageSquare },
         { id: "noaa_nwr", name: "NOAA Weather Radio", source: "NWS NWR Network", count: data?.noaa_nwr?.length || 0, icon: Radio },
         { id: "kiwisdr_nodes", name: "KiwiSDR Nodes", source: "KiwiSDR Directory", count: data?.kiwisdr_nodes?.length || 0, icon: Signal },
         { id: "day_night", name: "Day / Night Cycle", source: "Solar Calc", count: null, icon: Sun },

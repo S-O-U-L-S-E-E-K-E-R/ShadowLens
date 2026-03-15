@@ -621,6 +621,32 @@ async def api_ollama_models():
 
 
 # ---------------------------------------------------------------------------
+# Telegram — public channel scraping + regional search
+# ---------------------------------------------------------------------------
+
+@app.get("/api/telegram/channel/{channel}")
+async def api_telegram_channel(channel: str, limit: int = 20):
+    """Scrape recent posts from a public Telegram channel."""
+    import asyncio
+    from services.osint_bridge import telegram_channel
+    return await asyncio.to_thread(telegram_channel, channel, limit)
+
+
+class TelegramSearchBody(BaseModel):
+    query: str
+    channels: list = []
+    limit: int = 15
+
+
+@app.post("/api/telegram/search")
+async def api_telegram_search(body: TelegramSearchBody):
+    """Search OSINT Telegram channels for keyword mentions."""
+    import asyncio
+    from services.osint_bridge import telegram_search
+    return await asyncio.to_thread(telegram_search, body.query, body.channels, body.limit)
+
+
+# ---------------------------------------------------------------------------
 # GeoJSON Import — normalize arbitrary JSON/GeoJSON for map overlay
 # ---------------------------------------------------------------------------
 

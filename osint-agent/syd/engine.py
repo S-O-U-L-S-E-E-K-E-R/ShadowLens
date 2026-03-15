@@ -46,6 +46,7 @@ OSINT_KEYWORDS = [
     'what sites', 'what platforms', 'where is registered',
     'hudson rock', 'infostealer', 'breach check', 'credential leak',
     'compromised credentials', 'what accounts',
+    'telegram', 'telegram channel', 'scrape telegram', 'monitor telegram',
     'certificate transparency', 'cert transparency', 'crt.sh', 'ssl cert',
     'extract ioc', 'find ioc', 'indicators of compromise',
     'subdomains for', 'find subdomains',

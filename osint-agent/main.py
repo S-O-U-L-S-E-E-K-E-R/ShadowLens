@@ -28,6 +28,7 @@ from runners.base import get_job, list_jobs
 from runners.user_scanner import UserScannerRunner
 from runners.wireless_osint import WirelessOsintRunner
 from runners.ioc_extractor import IocExtractorRunner
+from runners.telegram_scraper import TelegramScraperRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ autorecon = AutoReconRunner()
 user_scanner = UserScannerRunner()
 wireless_osint = WirelessOsintRunner()
 ioc_extractor = IocExtractorRunner()
+telegram_scraper = TelegramScraperRunner()
 
 
 @asynccontextmanager
@@ -444,6 +446,26 @@ async def cert_transparency(domain: str):
 async def cert_info(domain: str):
     """Retrieve SSL certificate details from a domain."""
     return await ioc_extractor.ssl_cert_info(domain)
+
+
+# --- Telegram Scraper ---
+
+@app.get("/telegram/channel/{channel}")
+async def telegram_channel(channel: str, limit: int = 20):
+    """Scrape recent posts from a public Telegram channel."""
+    return await telegram_scraper.scrape_channel(channel, limit)
+
+
+class TelegramSearchRequest(BaseModel):
+    query: str
+    channels: list = []
+    limit: int = 15
+
+
+@app.post("/telegram/search")
+async def telegram_search(req: TelegramSearchRequest):
+    """Search multiple OSINT Telegram channels for posts mentioning a keyword."""
+    return await telegram_scraper.search_channels(req.query, req.channels or None, req.limit)
 
 
 # --- Wireless OSINT (Wigle WiFi/BT + wpa-sec credential leaks) ---
