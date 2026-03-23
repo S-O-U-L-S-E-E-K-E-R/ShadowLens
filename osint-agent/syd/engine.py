@@ -1051,6 +1051,32 @@ class FridayEngine:
             except Exception as e:
                 return {"answer": f"Deep scan failed: {e}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": ""}
 
+        # Telegram channel scrape (fast-path — bypass LLM)
+        if any(kw in q for kw in ['telegram channel', 'telegram @', 'from telegram', 'latest from telegram', 'scrape telegram', 'get telegram']):
+            import urllib.request
+            # Extract channel name
+            channel = None
+            import re as _re2
+            ch_match = _re2.search(r'@?([a-zA-Z][a-zA-Z0-9_]{3,})', q.split('telegram')[-1].strip())
+            if ch_match:
+                channel = ch_match.group(1)
+            if channel:
+                try:
+                    resp = urllib.request.urlopen(f"http://localhost:8002/telegram/channel/{channel}?limit=10", timeout=20)
+                    result = json.loads(resp.read())
+                    if result.get("status") == "ok" and result.get("posts"):
+                        info = result.get("channel_info", {})
+                        parts = [f"**Telegram: @{channel}** ({info.get('title', '')} — {info.get('members', '?')} members)\n"]
+                        for p in result["posts"][:10]:
+                            content = (p.get("content") or "")[:150]
+                            date = (p.get("date") or "")[:10]
+                            parts.append(f"- [{date}] {content}")
+                        return {"answer": "\n".join(parts), "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"Telegram @{channel}: {len(result['posts'])} posts"}
+                    else:
+                        return {"answer": f"Could not scrape @{channel}: {result.get('error', 'no posts')}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": ""}
+                except Exception as e:
+                    pass  # Fall through
+
         # EXIF GPS extraction from image URLs
         url_match = _re.search(r'https?://[^\s<>"\']+\.(?:jpg|jpeg|png|tiff|webp|gif)', q, _re.IGNORECASE)
         if url_match and any(kw in q for kw in ['exif', 'gps', 'geoloc', 'where was', 'extract location', 'photo location', 'image location', 'metadata']):
