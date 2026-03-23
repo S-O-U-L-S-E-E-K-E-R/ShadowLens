@@ -621,6 +621,22 @@ async def api_ollama_models():
 
 
 # ---------------------------------------------------------------------------
+# EXIF GPS Extraction
+# ---------------------------------------------------------------------------
+
+class ExifExtractBody(BaseModel):
+    url: str
+
+
+@app.post("/api/osint/exif-extract")
+async def api_exif_extract(body: ExifExtractBody):
+    """Extract GPS coordinates and EXIF metadata from an image URL."""
+    import asyncio
+    from services.osint_bridge import exif_extract
+    return await asyncio.to_thread(exif_extract, body.url)
+
+
+# ---------------------------------------------------------------------------
 # Threat Intelligence — free, no-auth APIs
 # ---------------------------------------------------------------------------
 

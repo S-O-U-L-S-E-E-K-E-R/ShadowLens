@@ -31,6 +31,7 @@ from runners.ioc_extractor import IocExtractorRunner
 from runners.telegram_scraper import TelegramScraperRunner
 from runners.google_osint import GoogleOsintRunner
 from runners.threat_intel import ThreatIntelRunner
+from runners.exif_extractor import ExifExtractorRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ ioc_extractor = IocExtractorRunner()
 telegram_scraper = TelegramScraperRunner()
 google_osint = GoogleOsintRunner()
 threat_intel = ThreatIntelRunner()
+exif_extractor = ExifExtractorRunner()
 
 
 @asynccontextmanager
@@ -426,6 +428,18 @@ async def friday_extract(req: FridayAnalyzeRequest):
     facts = await asyncio.to_thread(engine.extract_facts, req.scan_data, req.module)
     facts_text = engine.facts_to_text(facts, req.module)
     return {'facts': facts, 'facts_text': facts_text, 'module': req.module}
+
+
+# --- EXIF GPS Extraction ---
+
+class ExifUrlRequest(BaseModel):
+    url: str
+
+
+@app.post("/exif/extract")
+async def exif_extract(req: ExifUrlRequest):
+    """Extract GPS coordinates and EXIF metadata from an image URL."""
+    return await exif_extractor.extract_from_url(req.url)
 
 
 # --- Threat Intelligence (free, no auth) ---

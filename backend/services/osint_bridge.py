@@ -119,6 +119,11 @@ def ssl_cert_info(domain: str) -> dict:
     return _get(f"/cert/info/{domain}")
 
 
+def exif_extract(url: str) -> dict:
+    """Extract GPS and EXIF from image URL."""
+    return _post("/exif/extract", {"url": url})
+
+
 def threat_enrich_ip(ip: str) -> dict:
     """Full IP threat enrichment — InternetDB + ThreatFox + Tor."""
     return _get(f"/threat/ip/{ip}")

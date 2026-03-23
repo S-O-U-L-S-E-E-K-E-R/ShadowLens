@@ -1051,6 +1051,38 @@ class FridayEngine:
             except Exception as e:
                 return {"answer": f"Deep scan failed: {e}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": ""}
 
+        # EXIF GPS extraction from image URLs
+        url_match = _re.search(r'https?://[^\s<>"\']+\.(?:jpg|jpeg|png|tiff|webp|gif)', q, _re.IGNORECASE)
+        if url_match and any(kw in q for kw in ['exif', 'gps', 'geoloc', 'where was', 'extract location', 'photo location', 'image location', 'metadata']):
+            image_url = url_match.group(0)
+            import urllib.request
+            try:
+                payload = json.dumps({"url": image_url}).encode()
+                req = urllib.request.Request(
+                    "http://localhost:8002/exif/extract",
+                    data=payload, headers={"Content-Type": "application/json"}, method="POST")
+                resp = urllib.request.urlopen(req, timeout=20)
+                result = json.loads(resp.read())
+                if result.get("has_gps"):
+                    parts = [f"**EXIF GPS found in image:**\n"]
+                    parts.append(f"- **Location:** {result['lat']}, {result['lon']}")
+                    if result.get("altitude_m"):
+                        parts.append(f"- **Altitude:** {result['altitude_m']}m")
+                    if result.get("gps_date"):
+                        parts.append(f"- **GPS Date:** {result['gps_date']} {result.get('gps_time', '')}")
+                    if result.get("camera_make") or result.get("camera_model"):
+                        parts.append(f"- **Camera:** {result.get('camera_make', '')} {result.get('camera_model', '')}")
+                    if result.get("datetime"):
+                        parts.append(f"- **Taken:** {result['datetime']}")
+                    if result.get("direction"):
+                        parts.append(f"- **Direction:** {result['direction']}°")
+                    locations = [{"lat": result["lat"], "lon": result["lon"], "label": f"Photo location ({result.get('camera_model', 'EXIF')})", "source": "exif"}]
+                    return {"answer": "\n".join(parts), "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": f"EXIF: {result['lat']}, {result['lon']}", "locations": locations}
+                else:
+                    return {"answer": f"**No GPS data found** in image EXIF metadata.\n\nImage: `{image_url}`\nFormat: {result.get('format', '?')} | Size: {result.get('size', '?')}", "mode": "fast_osint", "query": question, "validated": True, "issues": [], "facts_summary": "No EXIF GPS"}
+            except Exception as e:
+                pass  # Fall through
+
         # IP threat enrichment — InternetDB + ThreatFox + Tor
         ip_match = _re.search(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', question)
         if ip_match and any(kw in q for kw in ['threat', 'vuln', 'ports', 'tor check', 'internetdb', 'enrich ip', 'check ip', 'scan ip']):
